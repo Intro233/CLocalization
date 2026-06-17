@@ -32,6 +32,9 @@ namespace CLocalization
         /// <summary>当前语言的区域信息（用于日期/货币/数字格式化）。</summary>
         private static CultureInfo _currentCulture;
 
+        /// <summary>当前语言信息缓存（ApplyLanguage 成功时赋值，避免 CurrentLanguage 每次 O(n) 查找）。</summary>
+        private static LanguageInfo _currentLanguageInfo;
+
         // ---------- 事件 ----------
 
         /// <summary>语言切换事件。Localize 组件订阅此事件以自动刷新显示。</summary>
@@ -45,15 +48,8 @@ namespace CLocalization
         /// <summary>当前语言代码。</summary>
         public static string CurrentLanguageCode => _currentCode;
 
-        /// <summary>当前语言信息（找不到返回 null）。</summary>
-        public static LanguageInfo CurrentLanguage
-        {
-            get
-            {
-                if (_settings == null || string.IsNullOrEmpty(_currentCode)) return null;
-                return _settings.FindLanguage(_currentCode);
-            }
-        }
+        /// <summary>当前语言信息（找不到返回 null）。直接返回缓存，O(1)。</summary>
+        public static LanguageInfo CurrentLanguage => _currentLanguageInfo;
 
         /// <summary>当前语言的区域信息（格式化用）。</summary>
         public static CultureInfo CurrentCulture => _currentCulture ?? CultureInfo.InvariantCulture;
@@ -324,6 +320,8 @@ namespace CLocalization
             _currentCode = code;
             _currentLocale = locale;
             _currentCulture = LocalizationFormatter.GetCulture(code);
+            // 缓存当前语言信息，供 CurrentLanguage O(1) 访问
+            _currentLanguageInfo = _settings.FindLanguage(code);
 
             // 预加载默认语言数据（首次切换时用于回退）
             if (_defaultLocale == null && _settings.FallbackToDefaultLanguage)
@@ -361,6 +359,7 @@ namespace CLocalization
 
         /// <summary>
         /// 解析文本：当前语言 → 回退默认语言 → 返回 key 本身。
+        /// 把当前/默认 locale 先捕获到局部变量，避免在解析过程中被并发切换语言读到半途替换的引用。
         /// </summary>
         private static string Resolve(string key, out bool found)
         {
@@ -372,17 +371,21 @@ namespace CLocalization
                 return key;
             }
 
+            // 局部捕获：一次解析内使用稳定的引用，避免主线程内的事件回调嵌套切换语言导致引用中途变化
+            LocaleData current = _currentLocale;
+            LocaleData fallback = _defaultLocale;
+
             // 当前语言命中
-            if (_currentLocale != null && _currentLocale.TryGetEntry(key, out var value))
+            if (current != null && current.TryGetEntry(key, out var value))
             {
                 found = true;
                 return value;
             }
 
             // 回退默认语言
-            if (_settings.FallbackToDefaultLanguage && _defaultLocale != null && _defaultLocale != _currentLocale)
+            if (_settings.FallbackToDefaultLanguage && fallback != null && fallback != current)
             {
-                if (_defaultLocale.TryGetEntry(key, out value))
+                if (fallback.TryGetEntry(key, out value))
                 {
                     found = true;
                     return value;

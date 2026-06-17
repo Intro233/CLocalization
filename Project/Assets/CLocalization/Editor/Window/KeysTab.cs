@@ -28,6 +28,12 @@ namespace CLocalization.Editor
         /// <summary>当前窗口引用（用于编辑后标记 dirty）。</summary>
         private LocalizationWindow _window;
 
+        /// <summary>每页最大行数（超过此值的 key 集合分页绘制，避免 OnGUI 一次画上万行卡死）。</summary>
+        private const int PageSize = 200;
+
+        /// <summary>当前页码（从 0 开始）。</summary>
+        private int _page;
+
         /// <summary>列宽：key 列 + 每语言列。</summary>
         private const float KeyColumnWidth = 180f;
         private const float LangColumnWidth = 200f;
@@ -77,20 +83,43 @@ namespace CLocalization.Editor
             // 过滤后的 key
             List<string> visibleKeys = GetFilteredKeys(locales);
 
+            // 分页：超过 PageSize 时只绘制当前页，避免上万行 OnGUI 卡死
+            int totalPages = (visibleKeys.Count + PageSize - 1) / PageSize;
+            if (totalPages == 0) totalPages = 1;
+            if (_page >= totalPages) _page = totalPages - 1;
+            if (_page < 0) _page = 0;
+            int start = _page * PageSize;
+            int end = System.Math.Min(start + PageSize, visibleKeys.Count);
+
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
             // 表头
             DrawTableHeader(locales);
 
-            // 数据行
-            for (int i = 0; i < visibleKeys.Count; i++)
+            // 数据行（仅当前页）
+            for (int i = start; i < end; i++)
             {
                 DrawRow(visibleKeys[i], locales, i % 2 == 0);
             }
 
             EditorGUILayout.EndScrollView();
 
-            EditorGUILayout.LabelField($"共 {visibleKeys.Count} / {_keys.Count} 个 key", EditorStyles.miniLabel);
+            // 分页控件（仅多于 1 页时显示）
+            if (totalPages > 1)
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("上一页", GUILayout.Width(60))) _page = System.Math.Max(0, _page - 1);
+                    GUILayout.Label($"第 {_page + 1} / {totalPages} 页", EditorStyles.miniLabel, GUILayout.Width(100));
+                    if (GUILayout.Button("下一页", GUILayout.Width(60))) _page = System.Math.Min(totalPages - 1, _page + 1);
+                    GUILayout.FlexibleSpace();
+                    EditorGUILayout.LabelField($"共 {visibleKeys.Count} / {_keys.Count} 个 key", EditorStyles.miniLabel);
+                }
+            }
+            else
+            {
+                EditorGUILayout.LabelField($"共 {visibleKeys.Count} / {_keys.Count} 个 key", EditorStyles.miniLabel);
+            }
         }
 
         /// <summary>绘制表头。</summary>

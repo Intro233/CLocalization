@@ -47,6 +47,10 @@ namespace CLocalization
                 return null;
             }
 
+            // 反序列化完成后立即卸载 TextAsset 的原始字节（LocaleData 是独立托管对象，不依赖底层字节）。
+            // UnloadAsset 仅释放该 TextAsset 的原生数据，不影响 LocaleData 及其他引用。
+            Resources.UnloadAsset(textAsset);
+
             _localeCache[languageCode] = data;
             return data;
         }

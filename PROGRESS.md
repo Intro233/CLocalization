@@ -3,7 +3,7 @@
 > **用途**：本文件记录 CLocalization 多语言插件的开发进度、已确认决策、剩余迭代任务。
 > 下次会话从本文件同步进度，可直接继续。
 >
-> **最后更新**：迭代 3 完成（功能真实性 + 命名占位符）
+> **最后更新**：迭代 4 完成（性能优化）
 
 ---
 
@@ -46,7 +46,7 @@
 | **迭代 1** | **修 Bug + 数据安全** | ✅ 已完成 |
 | **迭代 2** | **编辑器缺口补全** | ✅ 已完成 |
 | **迭代 3** | **功能真实性（命名占位符 + RTL + 修文档）** | ✅ 已完成 |
-| **迭代 4** | 性能优化 | ⬜ 待做 |
+| **迭代 4** | **性能优化** | ✅ 已完成 |
 | **迭代 5** | UniTask 异步加载架构升级 | ⬜ 待做 |
 
 ---
@@ -87,6 +87,14 @@
 
 > 已知限制：`Get(key, null)` 调用因多重载可能歧义，应避免（语义不明）。
 
+### 迭代 4：性能优化 —— 已完成
+- **C2** `ResourcesLocalizationLoader.LoadLocale` 反序列化后立即 `Resources.UnloadAsset(textAsset)` 释放原始文本字节（LocaleData 是独立托管对象，不依赖底层字节）
+- **C4** `Localization` 新增 `_currentLanguageInfo` 缓存字段，`CurrentLanguage` getter 改为 O(1) 直接返回缓存（原每次 O(n) 调 `FindLanguage`），`ApplyLanguage` 成功时赋值
+- **C3** `LocalizationPaths.GetLocalePath` 按 languageCode 缓存路径；`GetAssetPath` 改用 `string.Concat` 减少 3 段拼接的中间分配
+- **C5** `Localization.Resolve` 把 `_currentLocale`/`_defaultLocale` 先捕获到局部变量，避免解析过程中被并发切换读到半途替换的引用（健壮性 + 一致性）
+- **C1（评估不做）** Resources.Load 已有引擎级缓存，应用层再加缓存收益小且增加内存管理负担，故不加
+- **D7** KeysTab 加分页（每页 200 行），超过时显示翻页控件，避免上万 key 时 OnGUI 卡死（未重构 TreeView，低风险方案）
+
 ---
 
 ## 五、剩余迭代任务（详细）
@@ -99,20 +107,9 @@
 
 ---
 
-### 迭代 4：性能优化（优先级：中低）
+### 迭代 4：性能优化 —— ✅ 已完成
 
-**目标**：减少热路径 GC 分配与内存累积。
-
-| 编号 | 任务 | 技术点 | 涉及文件 |
-|---|---|---|---|
-| **C1** | 资源加载加缓存 | `LocalizeSprite/AudioSource/Font` 每次 `ApplyLocalization` 都重新 `Resources.Load`，无缓存。建议在 `ResourcesLocalizationLoader` 内加 `Dictionary<(code,key), Object>` 缓存（注意 Resources.Load 本身有内部缓存，主要优化点是路径拼接分配）。 | `Runtime/Loader/ResourcesLocalizationLoader.cs` |
-| **C2** | TextAsset 加载后卸载 | `ResourcesLocalizationLoader.LoadLocale` 反序列化后没 `Resources.UnloadAsset(textAsset)`，原始字节驻留。建议反序列化后立即 `Resources.UnloadAsset`。 | `Runtime/Loader/ResourcesLocalizationLoader.cs` |
-| **C3** | 路径字符串拼接优化 | `LocalizationPaths.GetAssetPath` 每次拼接 3 次分配。改用 `string.Concat`；高频 code 的 locale path 可缓存。 | `Runtime/Util/LocalizationPaths.cs` |
-| **C4** | 缓存当前 LanguageInfo | `CurrentLanguage` getter 每次 O(n) 调 `FindLanguage`。在 `ApplyLanguage` 缓存 `_currentLanguageInfo` 静态字段。 | `Runtime/Core/Localization.cs` |
-| **C5** | Resolve 局部变量捕获 | `Resolve` 把 `_currentLocale` 先读到局部变量再 `TryGetEntry`，避免读半途被换（健壮性 + 性能）。 | `Runtime/Core/Localization.cs` |
-| **D7** | KeysTab 表格虚拟滚动 | OnGUI 手绘所有 key，上万 key 会卡。考虑用 `TreeView`（Unity 内置虚拟滚动）。 | `Editor/Window/KeysTab.cs` |
-
-**优先级建议**：C2（内存泄漏风险）> C4（简单收益明确）> C3 > C1 > C5 > D7（工作量大，key 不多时可不做）。
+> 本节为历史记录。已交付：C2 TextAsset 卸载、C4 LanguageInfo 缓存、C3 路径拼接优化、C5 Resolve 局部捕获、D7 KeysTab 分页。C1 经评估不加（依赖引擎缓存）。详见上方「已完成迭代详情」。
 
 ---
 
@@ -185,13 +182,14 @@ Demo/                            DemoController.cs, DemoScene.unity
 ## 八、下次会话快速继续指引
 
 1. **读本文档**了解进度与决策
-2. **下一个任务是迭代 4**（性能优化：C2 TextAsset 卸载 > C4 缓存 LanguageInfo > C3 路径拼接 > C1 资源缓存 > D7 表格虚拟滚动）
+2. **下一个任务是迭代 5**（UniTask 异步加载架构升级）—— 这是最后一个迭代，改动最大，需引入 UniTask 包并重构 Loader 接口为异步，详见下方「迭代 5」详情块
 3. 关键文件优先读：
-   - `Runtime/Loader/ResourcesLocalizationLoader.cs`（C1/C2 优化位置）
-   - `Runtime/Core/Localization.cs`（C4/C5 优化位置）
-   - `Runtime/Util/LocalizationPaths.cs`（C3 路径拼接）
-4. 用户已验证：阶段 0-4 + 迭代 1 + 迭代 2 + 迭代 3 功能 OK，Demo 字体用 AlibabaPuHuiTi-2-75-SemiBold，按钮点击/语言切换正常
-5. **不要重复已完成的工作**；迭代 1/2/3 的修复与功能已落地，勿回退
+   - `Runtime/Loader/ILocalizationLoader.cs`（接口改造）
+   - `Runtime/Loader/ResourcesLocalizationLoader.cs`（异步实现）
+   - `Runtime/Core/Localization.cs`（ApplyLanguageAsync）
+   - `Project/Packages/manifest.json`（加 UniTask 包）
+4. 用户已验证：阶段 0-4 + 迭代 1-4 全部 OK，Demo 字体用 AlibabaPuHuiTi-2-75-SemiBold
+5. **不要重复已完成的工作**；迭代 1-4 的修复与优化已落地，勿回退
 6. 已知限制：`Get(key, null)` 多重载歧义（迭代 3 引入），调用方应避免传 null
 
 ---

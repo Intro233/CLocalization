@@ -6,6 +6,24 @@
 
 ---
 
+## [1.2.0] - 2026-06-17
+
+迭代 4：性能优化（减少热路径 GC 分配与内存累积）。
+
+### 性能优化
+- **TextAsset 即时卸载**：`ResourcesLocalizationLoader.LoadLocale` 反序列化后立即 `Resources.UnloadAsset` 释放原始文本字节，避免切换语言越多越累积（C2）。
+- **LanguageInfo 缓存**：`Localization.CurrentLanguage` 改为 O(1) 返回缓存（新增 `_currentLanguageInfo` 字段，`ApplyLanguage` 成功时赋值），原每次 O(n) 扫描 `FindLanguage`（C4）。
+- **路径拼接优化**：`LocalizationPaths.GetLocalePath` 按 languageCode 缓存结果；`GetAssetPath` 改用 `string.Concat` 减少 3 段拼接的中间字符串分配（C3）。
+- **Resolve 局部捕获**：`Localization.Resolve` 把当前/默认 locale 先捕获到局部变量，避免解析过程中被并发切换读到半途替换的引用（C5，健壮性 + 一致性）。
+
+### 编辑器
+- **KeysTab 分页**：超过 200 行时分页显示并带翻页控件，避免上万 key 时 OnGUI 卡死（D7，未重构 TreeView 的低风险方案）。
+
+### 评估不做
+- C1 资源缓存：`Resources.Load` 已有引擎级缓存，应用层再加缓存收益小且增加内存管理负担，故不加。
+
+---
+
 ## [1.1.0] - 2026-06-17
 
 迭代 1-3 的累计更新：修 Bug、编辑器缺口补全、功能真实性。
