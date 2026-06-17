@@ -14,6 +14,12 @@ namespace CLocalization.Editor
         /// <summary>当前编辑的所有语言数据（内存副本，保存才写盘）。</summary>
         private List<LocaleData> _locales = new List<LocaleData>();
 
+        /// <summary>待删除的语言代码集合（延迟删盘，SaveAll 时才真正删磁盘文件）。</summary>
+        private readonly HashSet<string> _pendingDeleteCodes = new HashSet<string>();
+
+        /// <summary>是否有未保存的修改（用于工具栏提示）。</summary>
+        private bool _dirty;
+
         /// <summary>当前选中的 Tab。</summary>
         private int _currentTab;
 
@@ -53,17 +59,50 @@ namespace CLocalization.Editor
         public void Reload()
         {
             _locales = LocalizationEditorData.LoadAllLocales();
+            _pendingDeleteCodes.Clear();
+            _dirty = false;
             _keysTab?.OnDataChanged(_locales);
             _diagnosticsTab?.OnDataChanged(_locales);
             Repaint();
         }
 
-        /// <summary>保存所有 locale 到磁盘。</summary>
+        /// <summary>保存所有 locale 到磁盘，并执行延迟的删除操作。</summary>
         public void SaveAll()
         {
+            // 先执行延迟删除：真正删除磁盘 JSON 文件
+            foreach (var code in _pendingDeleteCodes)
+            {
+                LocalizationEditorData.DeleteLocale(code);
+            }
+            _pendingDeleteCodes.Clear();
+
+            // 保存内存中的语言数据
             LocalizationEditorData.SaveAllLocales(_locales);
             AssetDatabase.Refresh();
+            _dirty = false;
             LocalizationLog.Info($"已保存 {_locales.Count} 种语言数据。");
+            Repaint();
+        }
+
+        /// <summary>标记有未保存的修改（供各 Tab 在编辑后调用）。</summary>
+        public void MarkDirty()
+        {
+            _dirty = true;
+            Repaint();
+        }
+
+        /// <summary>获取当前内存中的 locale 列表（供外部模块基于编辑中的数据同步 Settings 等）。</summary>
+        public List<LocaleData> GetCurrentLocales()
+        {
+            return _locales;
+        }
+
+        /// <summary>仅刷新各 Tab 的 key 缓存，不做全量 Reload（不清空待删集合，不重新读盘）。</summary>
+        public void RefreshCaches()
+        {
+            _keysTab?.OnDataChanged(_locales);
+            _diagnosticsTab?.OnDataChanged(_locales);
+            Repaint();
         }
 
         private void OnGUI()
@@ -102,9 +141,21 @@ namespace CLocalization.Editor
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
                 GUILayout.Label("CLocalization 编辑器", EditorStyles.boldLabel, GUILayout.Width(160));
+                // 未保存提示标记
+                if (_dirty)
+                {
+                    var old = GUI.color;
+                    GUI.color = new Color(1f, 0.7f, 0.2f);
+                    GUILayout.Label("* 未保存", EditorStyles.miniLabel, GUILayout.Width(60));
+                    GUI.color = old;
+                }
                 GUILayout.FlexibleSpace();
                 if (GUILayout.Button("重新加载", EditorStyles.toolbarButton, GUILayout.Width(80)))
                 {
+                    if (_dirty && !EditorUtility.DisplayDialog("重新加载", "有未保存的修改，重新加载将丢弃这些修改。继续？", "丢弃并重载", "取消"))
+                    {
+                        return;
+                    }
                     Reload();
                 }
                 if (GUILayout.Button("保存全部", EditorStyles.toolbarButton, GUILayout.Width(80)))
@@ -139,9 +190,10 @@ namespace CLocalization.Editor
             _locales.Add(locale);
             _keysTab.OnDataChanged(_locales);
             _diagnosticsTab.OnDataChanged(_locales);
+            MarkDirty();
         }
 
-        /// <summary>删除一种语言（供 LanguagesTab 调用）。</summary>
+        /// <summary>删除一种语言（供 LanguagesTab 调用）。仅移除内存副本并记录待删 code，SaveAll 时才真正删盘。</summary>
         public void RemoveLanguage(string code)
         {
             for (int i = 0; i < _locales.Count; i++)
@@ -149,8 +201,10 @@ namespace CLocalization.Editor
                 if (_locales[i].Meta.Code == code)
                 {
                     _locales.RemoveAt(i);
+                    _pendingDeleteCodes.Add(code); // 延迟删盘：SaveAll 时才真正删 JSON 文件
                     _keysTab.OnDataChanged(_locales);
                     _diagnosticsTab.OnDataChanged(_locales);
+                    MarkDirty();
                     return;
                 }
             }

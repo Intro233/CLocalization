@@ -72,12 +72,18 @@ namespace CLocalization.Editor
             }
 
             // 逐行解析数据
+            // AddedKeys 按行（key）去重统计，避免同一新 key 被多语言重复计数导致统计虚高
+            var addedKeySet = new System.Collections.Generic.HashSet<string>();
             for (int r = 1; r < table.Count; r++)
             {
                 var row = table[r];
                 if (row.Count == 0) continue;
                 string key = row[0];
                 if (string.IsNullOrEmpty(key)) continue;
+
+                // 记录该 key 是否在至少一个语言中是「全新」的（用于去重统计）
+                bool keyIsNewSomewhere = false;
+                bool keyUpdatedSomewhere = false;
 
                 foreach (var kv in codeToColumn)
                 {
@@ -86,14 +92,35 @@ namespace CLocalization.Editor
                     if (!codeToLocale.TryGetValue(code, out var locale)) continue;
                     if (locale.Entries == null) locale.Entries = new Dictionary<string, string>();
 
-                    string value = col < row.Count ? row[col] : "";
-                    // 空字符串视为「未翻译」，保留为空（不删除 key）
-                    bool existed = locale.Entries.ContainsKey(key);
-                    if (!existed) stats.AddedKeys++;
-                    else if (locale.Entries[key] != value) stats.UpdatedKeys++;
-                    locale.Entries[key] = value;
+                    string value = col < row.Count ? (row[col] ?? "") : "";
+
+                    bool existed = locale.Entries.TryGetValue(key, out var existingValue);
+
+                    if (string.IsNullOrEmpty(value))
+                    {
+                        // 空单元格视为「未翻译」，不覆盖已有翻译。
+                        // 但若该 key 在此语言中本就不存在，则不创建（避免引入大量空 key）。
+                        // 仅当 key 在其他语言有值、此语言确实需要占位时，由调用方决定是否补空。
+                        continue;
+                    }
+
+                    if (!existed)
+                    {
+                        locale.Entries[key] = value;
+                        keyIsNewSomewhere = true;
+                    }
+                    else if (existingValue != value)
+                    {
+                        locale.Entries[key] = value;
+                        keyUpdatedSomewhere = true;
+                    }
                 }
+
+                // 去重统计：同一 key 无论影响几种语言，只算一次新增/更新
+                if (keyIsNewSomewhere) addedKeySet.Add(key);
+                if (keyUpdatedSomewhere) stats.UpdatedKeys++;
             }
+            stats.AddedKeys = addedKeySet.Count;
 
             LocalizationLog.Info($"CSV 导入完成: 新增 {stats.AddedKeys} 个 key，更新 {stats.UpdatedKeys} 个翻译。");
             return stats;

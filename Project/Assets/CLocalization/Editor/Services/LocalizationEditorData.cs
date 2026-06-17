@@ -25,7 +25,7 @@ namespace CLocalization.Editor
         /// <summary>Settings 资源相对路径（相对 Assets）。</summary>
         public const string SettingsAssetPath = "Assets/CLocalization/Resources/CLocalization/LocalizationSettings.asset";
 
-        /// <summary>加载所有语言 JSON 文件为 LocaleData 列表。</summary>
+        /// <summary>加载所有语言 JSON 文件为 LocaleData 列表（精确匹配 .json 后缀，按语言代码排序，顺序稳定）。</summary>
         public static List<LocaleData> LoadAllLocales()
         {
             var result = new List<LocaleData>();
@@ -35,8 +35,20 @@ namespace CLocalization.Editor
                 return result;
             }
 
-            string[] files = Directory.GetFiles(dir, "*.json");
+            // 注意：Windows 下 Directory.GetFiles(dir, "*.json") 会误匹配 .json5/.json.bak 等，
+            // 因此改为获取全部文件后用精确后缀过滤，并排序保证 locale 顺序稳定（影响 CSV 语言列顺序）。
+            string[] files = Directory.GetFiles(dir, "*");
+            var filtered = new List<string>();
             foreach (string file in files)
+            {
+                if (file.EndsWith(LocalizationPaths.LocaleExtension, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    filtered.Add(file);
+                }
+            }
+            filtered.Sort(System.StringComparer.OrdinalIgnoreCase);
+
+            foreach (string file in filtered)
             {
                 LocaleData data = LoadLocaleFile(file);
                 if (data != null) result.Add(data);

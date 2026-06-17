@@ -25,6 +25,9 @@ namespace CLocalization.Editor
         /// <summary>滚动位置。</summary>
         private Vector2 _scroll;
 
+        /// <summary>当前窗口引用（用于编辑后标记 dirty）。</summary>
+        private LocalizationWindow _window;
+
         /// <summary>列宽：key 列 + 每语言列。</summary>
         private const float KeyColumnWidth = 180f;
         private const float LangColumnWidth = 200f;
@@ -39,6 +42,7 @@ namespace CLocalization.Editor
         /// <summary>绘制 Tab 内容。</summary>
         public void Draw(LocalizationWindow window, List<LocaleData> locales)
         {
+            _window = window;
             DrawSearchBar(locales);
             EditorGUILayout.Space(2);
             DrawKeyTable(locales);
@@ -148,6 +152,7 @@ namespace CLocalization.Editor
             {
                 if (locale.Entries == null) locale.Entries = new Dictionary<string, string>();
                 locale.Entries[key] = newVal;
+                _window?.MarkDirty();
             }
         }
 
@@ -189,6 +194,7 @@ namespace CLocalization.Editor
             }
             _keys.Add(key);
             _keys.Sort();
+            _window?.MarkDirty();
             LocalizationLog.Info($"已新增 key \"{key}\"（已在所有语言中创建空翻译，请填写）。");
         }
 
@@ -200,6 +206,7 @@ namespace CLocalization.Editor
                 if (locale.Entries != null) locale.Entries.Remove(key);
             }
             _keys.Remove(key);
+            _window?.MarkDirty();
         }
     }
 }

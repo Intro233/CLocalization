@@ -39,9 +39,11 @@ namespace CLocalization.Editor
                     if (GUILayout.Button("删除", GUILayout.Width(50)))
                     {
                         string code = locale.Meta?.Code;
-                        if (EditorUtility.DisplayDialog("删除语言", $"确认删除语言 \"{code}\"？磁盘上的 JSON 文件也会被删除（保存后生效）。", "删除", "取消"))
+                        if (EditorUtility.DisplayDialog("删除语言",
+                            $"确认删除语言 \"{code}\"？\n\n该操作将从编辑器移除该语言，并在点击「保存全部」后删除磁盘上的 JSON 文件。\n（保存前可点「重新加载」撤销）",
+                            "删除", "取消"))
                         {
-                            LocalizationEditorData.DeleteLocale(code);
+                            // 仅从内存移除并记录待删 code，真正删盘在 SaveAll 时执行（延迟删盘，可撤销）
                             window.RemoveLanguage(code);
                             SyncSettings(window);
                         }
@@ -88,13 +90,15 @@ namespace CLocalization.Editor
         }
 
         /// <summary>同步 Settings 资源的语言列表（运行时切换需要 Settings 配置）。</summary>
+        /// <remarks>基于窗口当前的内存 locale 列表重建 Settings，不从磁盘重新加载，避免清空待删集合。</remarks>
         private void SyncSettings(LocalizationWindow window)
         {
             var settings = LocalizationSetup.LoadOrCreateSettings();
             if (settings == null) return;
 
-            // 重新加载所有 locale，据此重建 Settings 的语言列表
-            var locales = LocalizationEditorData.LoadAllLocales();
+            // 使用窗口内存中的 locale 列表（已反映增删），而非从磁盘重新加载，
+            // 否则待删的语言文件仍在磁盘上会被重新加载回来，且 Reload 会清空 _pendingDeleteCodes。
+            var locales = window.GetCurrentLocales();
             var so = new SerializedObject(settings);
             var list = so.FindProperty("languages");
             if (list == null) return;
@@ -114,8 +118,8 @@ namespace CLocalization.Editor
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();
 
-            // 刷新窗口数据
-            window.Reload();
+            // 仅刷新各 Tab 的 key 缓存，不做全量 Reload（避免清空待删集合）
+            window.RefreshCaches();
         }
     }
 }

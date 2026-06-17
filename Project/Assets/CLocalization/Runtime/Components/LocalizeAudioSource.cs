@@ -33,12 +33,11 @@ namespace CLocalization
             if (targetSource == null) return;
             if (string.IsNullOrEmpty(localizationKey)) return;
 
-            // 切换前若正在播放，记录状态以便恢复
-            _wasPlaying = targetSource.isPlaying;
-
             AudioClip clip = Localization.GetAsset<AudioClip>(localizationKey);
             if (clip != null)
             {
+                // 仅在确实要切换时才记录播放状态并应用，避免 miss 时破坏当前播放
+                _wasPlaying = targetSource.isPlaying;
                 targetSource.clip = clip;
                 if (autoPlayIfPlaying && _wasPlaying && isActiveAndEnabled)
                 {
@@ -47,7 +46,8 @@ namespace CLocalization
             }
             else
             {
-                LocalizationLog.Warning($"[{nameof(LocalizeAudioSource)}] 未找到 AudioClip 资源 key=\"{localizationKey}\" 语言={Localization.CurrentLanguageCode}。");
+                // 资源缺失时保留旧 clip 不清空，仅告警，避免 UI/音频留白
+                LocalizationLog.Warning($"[{nameof(LocalizeAudioSource)}] 未找到 AudioClip 资源 key=\"{localizationKey}\" 语言={Localization.CurrentLanguageCode}，已保留当前音频。");
             }
         }
 

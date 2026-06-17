@@ -114,7 +114,30 @@ namespace CLocalization
             string initialCode = LocalizationPrefs.ResolveInitialLanguage(settings, codes);
             ApplyLanguage(initialCode, persist: false, fireEvent: true);
 
-            LocalizationLog.Info($"本地化系统已初始化，当前语言: {_currentCode}");
+            // 初始化兜底：若初始语言加载失败（ApplyLanguage 内部已 return，_currentCode 仍为 null），
+            // 则尝试回退到默认语言；再失败则尝试可用列表中第一个能加载成功的语言。
+            if (string.IsNullOrEmpty(_currentCode))
+            {
+                LocalizationLog.Warning($"初始语言 \"{initialCode}\" 加载失败，尝试回退到默认语言。");
+                ApplyLanguage(settings.DefaultLanguageCode, persist: false, fireEvent: true);
+            }
+            if (string.IsNullOrEmpty(_currentCode))
+            {
+                foreach (var c in codes)
+                {
+                    ApplyLanguage(c, persist: false, fireEvent: true);
+                    if (!string.IsNullOrEmpty(_currentCode)) break;
+                }
+            }
+
+            if (string.IsNullOrEmpty(_currentCode))
+            {
+                LocalizationLog.Error("所有语言数据加载失败，本地化系统处于降级状态（查询将返回 key 本身）。请检查 Resources/CLocalization/Locales 目录及 Settings 配置。");
+            }
+            else
+            {
+                LocalizationLog.Info($"本地化系统已初始化，当前语言: {_currentCode}");
+            }
         }
 
         // ---------- 文本查询 ----------
@@ -122,10 +145,20 @@ namespace CLocalization
         /// <summary>
         /// 获取 key 对应的本地化文本（不带参数）。
         /// 查询失败时按回退策略处理：回退默认语言 → 回退 key 字符串本身。
+        /// 注意：返回值始终非 null（失败时返回 key 本身），如需区分"查到"与"回退"，用带 out found 的重载。
         /// </summary>
         public static string Get(string key)
         {
             return Resolve(key, out _);
+        }
+
+        /// <summary>
+        /// 获取 key 对应的本地化文本，并通过 found 标识是否真正命中（而非回退到 key 字符串）。
+        /// found=true 表示在当前语言或默认语言中查到；found=false 表示最终回退返回 key 本身。
+        /// </summary>
+        public static string Get(string key, out bool found)
+        {
+            return Resolve(key, out found);
         }
 
         /// <summary>
@@ -139,7 +172,9 @@ namespace CLocalization
         }
 
         /// <summary>
-        /// 尝试获取 key 文本，不触发回退。成功返回 true。
+        /// 尝试获取 key 文本，不触发回退。成功（在【当前语言】中命中）返回 true。
+        /// 注意：本方法的语义与 <see cref="Get(string)"/> 不同——Get 会回退到默认语言甚至返回 key 本身，
+        /// 而 TryGet 只检查当前语言，不回退。若需要带回退且知晓是否命中，请用 Get(key, out found)。
         /// </summary>
         public static bool TryGet(string key, out string value)
         {
@@ -207,23 +242,22 @@ namespace CLocalization
 
         /// <summary>
         /// 应用某语言：加载对应 LocaleData，更新区域信息，按需持久化与触发事件。
+        /// 加载失败时保持旧状态不变，不持久化、不触发事件，避免坏语言代码被记住导致下次启动死循环。
         /// </summary>
         private static void ApplyLanguage(string code, bool persist, bool fireEvent)
         {
             var locale = _loader.LoadLocale(code);
             if (locale == null)
             {
-                LocalizationLog.Warning($"语言 \"{code}\" 数据加载失败。");
-                // 即使数据加载失败也记录 code，避免反复报错；但保持旧 locale
-                _currentCode = code;
-                _currentCulture = LocalizationFormatter.GetCulture(code);
+                // 加载失败：保持旧语言状态（code/locale/culture 都不动），不持久化、不触发事件。
+                // 这样可避免把一个加载失败的语言代码写入 PlayerPrefs，导致下次启动恢复坏 code 再失败的死循环。
+                LocalizationLog.Warning($"语言 \"{code}\" 数据加载失败，已保持当前语言 \"{_currentCode}\"。");
+                return;
             }
-            else
-            {
-                _currentCode = code;
-                _currentLocale = locale;
-                _currentCulture = LocalizationFormatter.GetCulture(code);
-            }
+
+            _currentCode = code;
+            _currentLocale = locale;
+            _currentCulture = LocalizationFormatter.GetCulture(code);
 
             // 预加载默认语言数据（首次切换时用于回退）
             if (_defaultLocale == null && _settings.FallbackToDefaultLanguage)
@@ -239,7 +273,7 @@ namespace CLocalization
                 }
             }
 
-            // 持久化
+            // 持久化（仅成功切换时才写入，避免坏 code 被记住）
             if (persist)
             {
                 LocalizationPrefs.SaveLanguage(_currentCode);
