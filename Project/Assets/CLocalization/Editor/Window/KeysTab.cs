@@ -75,7 +75,7 @@ namespace CLocalization.Editor
             }
 
             // 过滤后的 key
-            List<string> visibleKeys = GetFilteredKeys();
+            List<string> visibleKeys = GetFilteredKeys(locales);
 
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
@@ -156,19 +156,38 @@ namespace CLocalization.Editor
             }
         }
 
-        /// <summary>按搜索关键字过滤 key（匹配 key 或任意语言文本）。</summary>
-        private List<string> GetFilteredKeys()
+        /// <summary>按搜索关键字过滤 key：匹配 key 本身或任意语言的翻译文本。</summary>
+        private List<string> GetFilteredKeys(List<LocaleData> locales)
         {
             if (string.IsNullOrEmpty(_search)) return _keys;
 
-            // 注意：过滤需访问 locale 数据，但此方法在 Draw 中被调用时 locales 已传入；
-            // 为保持签名简单，这里用缓存（数据变化时由 OnDataChanged 重建）。
-            // 此处简化：仅按 key 文本过滤；如需按翻译过滤可在 Draw 时传入。
             var result = new List<string>();
             string needle = _search.ToLowerInvariant();
             foreach (var key in _keys)
             {
-                if (key.ToLowerInvariant().Contains(needle)) result.Add(key);
+                // 1) 匹配 key 本身
+                if (key.ToLowerInvariant().Contains(needle))
+                {
+                    result.Add(key);
+                    continue;
+                }
+                // 2) 匹配任意语言的翻译文本
+                bool matched = false;
+                if (locales != null)
+                {
+                    foreach (var locale in locales)
+                    {
+                        if (locale?.Entries != null
+                            && locale.Entries.TryGetValue(key, out var v)
+                            && v != null
+                            && v.ToLowerInvariant().Contains(needle))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+                if (matched) result.Add(key);
             }
             return result;
         }

@@ -8,15 +8,17 @@ namespace CLocalization.Editor
     /// <summary>
     /// 诊断 Tab。检测并展示：
     /// - 缺失翻译：某 key 在部分语言存在，在另一些语言缺失（空值）。
-    /// - 重复 key：理论上 JSON 内不会重复（Dictionary 自动去重），但用于跨文件一致性校验。
-    /// 帮助译者快速定位未完成的工作。
+    /// - 未使用 key：在 JSON 中存在，但没有任何 Prefab/Scene 组件引用、也没有源码字面量引用的 key。
+    /// 帮助译者与开发者定位未完成的工作与可清理的废 key。
     /// </summary>
     public class DiagnosticsTab
     {
         /// <summary>诊断结果缓存。</summary>
         private DiagnosticsResult _result;
-        /// <summary>滚动位置。</summary>
+        /// <summary>缺失翻译滚动位置。</summary>
         private Vector2 _scroll;
+        /// <summary>未使用 key 滚动位置。</summary>
+        private Vector2 _unusedScroll;
 
         public void OnDataChanged(List<LocaleData> locales)
         {
@@ -36,7 +38,8 @@ namespace CLocalization.Editor
                 }
             }
             EditorGUILayout.HelpBox(
-                "检测各语言的翻译完整性：列出在某语言中缺失（空值）的 key，以及各语言词条数对比。",
+                "检测各语言的翻译完整性（缺失明细），以及未被任何组件/源码引用的「未使用 key」。\n" +
+                "注意：未使用 key 检测基于静态扫描，动态拼接的 key 可能误报。",
                 MessageType.Info);
 
             if (_result == null)
@@ -48,6 +51,8 @@ namespace CLocalization.Editor
             DrawSummary(locales);
             EditorGUILayout.Space(8);
             DrawMissingDetail();
+            EditorGUILayout.Space(8);
+            DrawUnusedKeys(locales);
         }
 
         /// <summary>绘制汇总信息：各语言词条数。</summary>
@@ -97,12 +102,39 @@ namespace CLocalization.Editor
             EditorGUILayout.EndScrollView();
         }
 
-        /// <summary>执行检测：找出每个 key 缺失于哪些语言。</summary>
+        /// <summary>绘制未使用 key 列表（JSON 中有但无组件/源码引用）。</summary>
+        private void DrawUnusedKeys(List<LocaleData> locales)
+        {
+            EditorGUILayout.LabelField($"未使用 Key ({_result.UnusedKeys.Count} 项)", EditorStyles.boldLabel);
+
+            if (_result.UnusedKeys.Count == 0)
+            {
+                EditorGUILayout.HelpBox("✓ 所有 key 均有组件或源码引用，无未使用 key。", MessageType.Info);
+                return;
+            }
+
+            EditorGUILayout.HelpBox(
+                "这些 key 存在于语言文件中，但未在任何 Prefab/Scene 的 Localize 组件、也未在源码 Localization.Get(\"...\") 中被引用。\n" +
+                "可能是废弃 key，可考虑清理。注意动态拼接的 key 可能被误报。",
+                MessageType.Warning);
+
+            _unusedScroll = EditorGUILayout.BeginScrollView(_unusedScroll, GUILayout.MinHeight(140));
+            foreach (var key in _result.UnusedKeys)
+            {
+                using (new EditorGUILayout.HorizontalScope(GUI.skin.box))
+                {
+                    EditorGUILayout.LabelField(key);
+                    GUILayout.FlexibleSpace();
+                }
+            }
+            EditorGUILayout.EndScrollView();
+        }
         private DiagnosticsResult RunDiagnostics(List<LocaleData> locales)
         {
             var result = new DiagnosticsResult();
             var allKeys = LocalizationEditorData.CollectAllKeys(locales);
 
+            // 1) 缺失翻译检测
             foreach (var key in allKeys)
             {
                 var missingIn = new List<string>();
@@ -122,6 +154,24 @@ namespace CLocalization.Editor
                     result.MissingEntries[key] = missingIn;
                 }
             }
+
+            // 2) 未使用 key 检测：所有 key − (组件引用 ∪ 源码字面量引用)
+            var referenced = new HashSet<string>();
+            // 组件字段引用（Prefab/Scene）
+            var compRefs = LocalizationReferenceScanner.ScanAllReferences();
+            foreach (var k in compRefs.Keys) referenced.Add(k);
+            // 源码字面量引用（Localization.Get("xxx")）
+            var srcRefs = LocalizationReferenceScanner.ScanSourceCodeKeyLiterals();
+            foreach (var k in srcRefs) referenced.Add(k);
+
+            foreach (var key in allKeys)
+            {
+                if (!referenced.Contains(key))
+                {
+                    result.UnusedKeys.Add(key);
+                }
+            }
+            result.UnusedKeys.Sort();
             return result;
         }
 
@@ -130,6 +180,8 @@ namespace CLocalization.Editor
         {
             /// <summary>key → 缺失它的语言代码列表。</summary>
             public Dictionary<string, List<string>> MissingEntries = new Dictionary<string, List<string>>();
+            /// <summary>未被任何组件/源码引用的 key 列表（可能可清理）。</summary>
+            public List<string> UnusedKeys = new List<string>();
         }
     }
 }

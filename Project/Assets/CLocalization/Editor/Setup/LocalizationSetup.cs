@@ -64,6 +64,70 @@ namespace CLocalization.Editor
             return settings;
         }
 
+        /// <summary>
+        /// 根据磁盘上实际存在的 locale 文件，把 Settings 的语言列表与文件保持同步（merge 策略）。
+        /// - 文件存在但 Settings 没有的语言 → 新增到 Settings；
+        /// - Settings 有但文件不存在的语言 → 保留（不删除，避免丢失用户手动配置），仅会被后续 UI 提示；
+        /// - 两边都有的 → 用文件的 displayName 更新。
+        /// 供 AssetPostprocessor（文件增删时）与编辑器窗口共用。
+        /// </summary>
+        /// <returns>是否有变化。</returns>
+        public static bool SyncSettingsFromLocales()
+        {
+            var settings = LoadOrCreateSettings();
+            if (settings == null) return false;
+
+            var locales = LocalizationEditorData.LoadAllLocales();
+            var so = new SerializedObject(settings);
+            var list = so.FindProperty("languages");
+            if (list == null) return false;
+
+            // 收集文件中现有的语言代码
+            var fileCodes = new System.Collections.Generic.HashSet<string>();
+            foreach (var locale in locales)
+            {
+                if (locale?.Meta == null) continue;
+                fileCodes.Add(locale.Meta.Code);
+            }
+
+            bool changed = false;
+
+            // 1) 文件有、Settings 没有的 → 追加
+            var existingCodes = new System.Collections.Generic.HashSet<string>();
+            for (int i = 0; i < list.arraySize; i++)
+            {
+                var codeProp = list.GetArrayElementAtIndex(i).FindPropertyRelative("languageCode");
+                if (codeProp != null && !string.IsNullOrEmpty(codeProp.stringValue))
+                {
+                    existingCodes.Add(codeProp.stringValue);
+                }
+            }
+
+            foreach (var locale in locales)
+            {
+                if (locale?.Meta == null) continue;
+                if (!existingCodes.Contains(locale.Meta.Code))
+                {
+                    int idx = list.arraySize;
+                    list.arraySize = idx + 1;
+                    var element = list.GetArrayElementAtIndex(idx);
+                    var codeProp = element.FindPropertyRelative("languageCode");
+                    var nameProp = element.FindPropertyRelative("displayName");
+                    if (codeProp != null) codeProp.stringValue = locale.Meta.Code;
+                    if (nameProp != null) nameProp.stringValue = locale.Meta.DisplayName ?? locale.Meta.Code;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+            {
+                so.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(settings);
+                AssetDatabase.SaveAssets();
+            }
+            return changed;
+        }
+
         /// <summary>为 settings 填入默认 4 语言（中/英/日/韩），仅当列表为空时填充。</summary>
         public static void ConfigureDefaults(LocalizationSettings settings)
         {
