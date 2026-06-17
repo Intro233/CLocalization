@@ -1,0 +1,20 @@
+{
+    "name": "CLocalization.Editor",
+    "rootNamespace": "CLocalization.Editor",
+    "references": [
+        "CLocalization.Runtime",
+        "GUID:6055be8ebc891e5419c03dfc6c60778c",
+        "Newtonsoft.Json"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

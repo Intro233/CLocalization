@@ -5,6 +5,8 @@
 # Recommended: add any editor/OS/tool-specific ignore rules from the Global/ templates as needed.
 # See: https://github.com/github/gitignore/tree/main/Global
 #
+# NOTE: 本仓库采用「仓库根 + Project/ 子目录」结构，Unity 工程实际位于 Project/ 下。
+#       因此下方同时提供了「根相对路径」与「Project/ 前缀路径」两组规则，确保忽略规则命中。
 .utmp/
 /[Ll]ibrary/
 /[Tt]emp/
@@ -13,6 +15,14 @@
 /[Bb]uilds/
 /[Ll]ogs/
 /[Uu]ser[Ss]ettings/
+# Project/ 子目录下的 Unity 生成目录（实际工程位置）
+/Project/[Ll]ibrary/
+/Project/[Tt]emp/
+/Project/[Oo]bj/
+/Project/[Bb]uild/
+/Project/[Bb]uilds/
+/Project/[Ll]ogs/
+/Project/[Uu]ser[Ss]ettings/
 *.log
 
 # By default unity supports Blender asset imports, *.blend1 blender files do not need to be commited to version control.

@@ -1,0 +1,17 @@
+{
+    "name": "CLocalization.Runtime",
+    "rootNamespace": "CLocalization",
+    "references": [
+        "GUID:6055be8ebc891e5419c03dfc6c60778c",
+        "Newtonsoft.Json"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
