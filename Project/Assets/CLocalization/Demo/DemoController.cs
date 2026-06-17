@@ -28,6 +28,16 @@ namespace CLocalization.Demo
         private TMP_Text _parameterText;
         /// <summary>显示格式化（数字/货币/日期）的标签。</summary>
         private TMP_Text _formatText;
+        /// <summary>语言按钮映射：语言代码 → 按钮 Image，用于切换时更新选中态高亮。</summary>
+        private readonly System.Collections.Generic.Dictionary<string, Image> _langButtons = new System.Collections.Generic.Dictionary<string, Image>();
+
+        /// <summary>Demo 使用的 TMP 字体（阿里巴巴普惠体）。加载失败则回退 TMP 默认字体。</summary>
+        private TMP_FontAsset _demoFont;
+
+        /// <summary>未选中按钮底色。</summary>
+        private static readonly Color BtnNormalColor = new Color(0.20f, 0.50f, 0.90f, 1f);
+        /// <summary>当前选中按钮底色（橙色高亮）。</summary>
+        private static readonly Color BtnSelectedColor = new Color(0.95f, 0.55f, 0.15f, 1f);
 
         private void Awake()
         {
@@ -40,6 +50,13 @@ namespace CLocalization.Demo
                     s = Resources.Load<LocalizationSettings>("CLocalization/LocalizationSettings");
                 }
                 if (s != null) Localization.Initialize(s);
+            }
+
+            // 加载 Demo 字体（阿里巴巴普惠体），失败回退 null（TMP 用默认字体）
+            _demoFont = Resources.Load<TMP_FontAsset>("AlibabaPuHuiTi-2-75-SemiBold");
+            if (_demoFont == null)
+            {
+                Debug.LogWarning("[CLoc] 未找到 AlibabaPuHuiTi-2-75-SemiBold 字体，Demo 将使用 TMP 默认字体。");
             }
 
             BuildUI();
@@ -55,11 +72,12 @@ namespace CLocalization.Demo
             Localization.OnLanguageChanged -= HandleLanguageChanged;
         }
 
-        /// <summary>语言切换回调：刷新动态内容（插值文本、格式化文本）。</summary>
+        /// <summary>语言切换回调：刷新动态内容（插值文本、格式化文本、按钮选中态）。</summary>
         private void HandleLanguageChanged(LanguageInfo lang)
         {
             RefreshDynamic();
             UpdateLangLabel();
+            UpdateButtonStates();
         }
 
         private void Start()
@@ -116,6 +134,7 @@ namespace CLocalization.Demo
             var bgGo = CreateUIObject("Background", canvasGo.transform);
             var bgImage = bgGo.AddComponent<Image>();
             bgImage.color = new Color(0.12f, 0.14f, 0.18f, 0.95f);
+            bgImage.raycastTarget = false; // 背景不接收点击，避免任何潜在拦截
             StretchToParent(bgImage.rectTransform);
 
             // 内容垂直布局容器
@@ -188,23 +207,46 @@ namespace CLocalization.Demo
         {
             var go = CreateUIObject("Btn_" + langCode, parent);
             var image = go.AddComponent<Image>();
-            image.color = new Color(0.25f, 0.45f, 0.85f, 1f);
+            image.color = Localization.CurrentLanguageCode == langCode ? BtnSelectedColor : BtnNormalColor;
             var btn = go.AddComponent<Button>();
             var colors = btn.colors;
-            colors.highlightedColor = new Color(0.4f, 0.6f, 1f);
-            colors.pressedColor = new Color(0.2f, 0.35f, 0.7f);
+            colors.normalColor = BtnNormalColor;
+            colors.highlightedColor = new Color(0.35f, 0.65f, 1.0f, 1f);
+            colors.pressedColor = new Color(0.12f, 0.32f, 0.62f, 1f);
+            colors.selectedColor = BtnNormalColor;
+            colors.disabledColor = new Color(0.3f, 0.3f, 0.3f, 0.5f);
+            colors.colorMultiplier = 1f;
             btn.colors = colors;
 
-            // 按钮文字
-            var tmp = CreateTMPText("Text", go.transform, 22, FontStyles.Bold, Color.white);
+            // 关键：给按钮自身设置 LayoutElement 的 preferredHeight，
+            // 否则父级 HorizontalLayoutGroup（childForceExpandHeight=false）会把按钮高度算成 0，导致点不到。
+            SetHeight(go.GetComponent<RectTransform>(), 56);
+
+            // 按钮文字（关键：关闭 raycastTarget，避免子物体拦截点击导致 Button 收不到事件）
+            var tmp = CreateTMPText("Text", go.transform, 24, FontStyles.Bold, Color.white);
             tmp.text = displayText;
             tmp.alignment = TextAlignmentOptions.Center;
+            tmp.raycastTarget = false; // 让点击穿透到按钮 Image，UGUI Button 才能响应
             StretchToParent(tmp.rectTransform);
+
+            // 注册到映射，供切换语言时更新选中态
+            _langButtons[langCode] = image;
 
             btn.onClick.AddListener(() =>
             {
                 Localization.SetLanguage(langCode);
             });
+        }
+
+        /// <summary>更新所有语言按钮的选中态高亮。</summary>
+        private void UpdateButtonStates()
+        {
+            string current = Localization.CurrentLanguageCode;
+            foreach (var kv in _langButtons)
+            {
+                if (kv.Value == null) continue;
+                kv.Value.color = kv.Key == current ? BtnSelectedColor : BtnNormalColor;
+            }
         }
 
         // ---------- UI 辅助方法 ----------
@@ -222,6 +264,8 @@ namespace CLocalization.Demo
         {
             var go = CreateUIObject(name, parent);
             var tmp = go.AddComponent<TextMeshProUGUI>();
+            // 应用阿里巴巴普惠体（加载失败时 _demoFont 为 null，TMP 自动用默认字体）
+            if (_demoFont != null) tmp.font = _demoFont;
             tmp.fontSize = fontSize;
             tmp.fontStyle = style;
             tmp.color = color;

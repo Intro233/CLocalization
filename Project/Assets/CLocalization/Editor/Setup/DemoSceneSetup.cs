@@ -23,16 +23,19 @@ namespace CLocalization.Editor
             // 新建场景
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
-            // 主摄像机（UGUI 仍需要一个摄像机作为 EventSystem 视线，ScreenSpaceOverlay 模式不强制，但保留以规范）
+            // 主摄像机（设置 MainCamera 标签，UGUI 与音频需要）
             var camGo = new GameObject("Main Camera");
+            camGo.tag = "MainCamera";
             var cam = camGo.AddComponent<Camera>();
             cam.clearFlags = CameraClearFlags.SolidColor;
             cam.backgroundColor = new Color(0.08f, 0.09f, 0.11f);
             cam.orthographic = true;
             cam.orthographicSize = 5;
+            camGo.AddComponent<AudioListener>();
 
-            // EventSystem（UGUI 交互必需）
-            if (Object.FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
+            // EventSystem（UGUI 交互必需）。若已存在则不重复创建。
+            // 注意：FindObjectOfType 在新版 Unity 已 obsolete，改用 FindAnyObjectByType。
+            if (Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
             {
                 var esGo = new GameObject("EventSystem");
                 esGo.AddComponent<UnityEngine.EventSystems.EventSystem>();
