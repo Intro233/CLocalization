@@ -3,7 +3,7 @@
 > **用途**：本文件记录 CLocalization 多语言插件的开发进度、已确认决策、剩余迭代任务。
 > 下次会话从本文件同步进度，可直接继续。
 >
-> **最后更新**：迭代 2 完成（编辑器缺口补全）
+> **最后更新**：迭代 3 完成（功能真实性 + 命名占位符）
 
 ---
 
@@ -45,7 +45,7 @@
 | 阶段 4 | Demo 场景 + 文档 | ✅ 已完成 |
 | **迭代 1** | **修 Bug + 数据安全** | ✅ 已完成 |
 | **迭代 2** | **编辑器缺口补全** | ✅ 已完成 |
-| **迭代 3** | 功能真实性（命名占位符 + 修文档） | ⬜ 待做 |
+| **迭代 3** | **功能真实性（命名占位符 + RTL + 修文档）** | ✅ 已完成 |
 | **迭代 4** | 性能优化 | ⬜ 待做 |
 | **迭代 5** | UniTask 异步加载架构升级 | ⬜ 待做 |
 
@@ -78,33 +78,24 @@
 - **D4** KeysTab 搜索匹配翻译内容（不只 key）
 - **D5** 三个组件 Drawer（`LocalizeSpriteDrawer`/`LocalizeAudioSourceDrawer`/`LocalizeFontDrawer`）+ 共用 `LocalizeKeyFieldDrawer`
 
+### 迭代 3：功能真实性 + 命名占位符 —— 已完成
+- **B1 命名占位符**：`LocalizationFormatter` 新增 `FormatNamed`/`FormatMixed`（正则匹配 `{name}`，向后兼容 `{0}`）；`Localization` 新增 3 个命名重载（IDictionary / 匿名对象 / 混合）；`LocalizeText` 新增 `SetNamedArgs(IDictionary)` 和 `SetNamedArgs(object)`，`ApplyLocalization` 支持命名/位置混合插值
+- **B3 RTL 接入**：`LocalizeText.ApplyToTarget` 根据当前语言 `IsRightToLeft` 设置 TMP 的 `isRightToLeft`（传统 UI.Text 无原生 RTL，注释说明）
+- **B2 文档修正**：CHANGELOG 明确复数"未实现且无抽象（非预留）"、RTL"仅设文本方向，不含 bidi 整形"
+- **E3 映射补全**：`SystemLanguageToCode` 补全越南语/泰语/土耳其语/印地语/印尼语/波兰语等，葡语改 pt-BR
+- **文档更新**：README 加占位符插值示例、命名重载 API 表、编辑器工具菜单速查；CHANGELOG 新增 [1.1.0] 版本块
+
+> 已知限制：`Get(key, null)` 调用因多重载可能歧义，应避免（语义不明）。
+
 ---
 
 ## 五、剩余迭代任务（详细）
 
 ### 迭代 3：功能真实性 + 命名占位符（优先级：中）
 
-**目标**：让注释/文档声称支持的功能真正可用，或修正文档对齐实现。
+### 迭代 3：功能真实性 + 命名占位符 —— ✅ 已完成
 
-| 编号 | 任务 | 技术点 | 涉及文件 |
-|---|---|---|---|
-| **B1** | 实现命名占位符 `{name}` | 当前 `LocalizationFormatter.Format` 只用 `string.Format`（只支持 `{0}` 位置占位，遇 `{name}` 抛异常被吞）。需新增正则替换逻辑：匹配 `{name}` 用 `Dictionary<string,object>` 或命名参数填充。建议新增重载 `Get(string key, Dictionary<string,object> args)` 和 `Get(string key, object args)`（反射属性名）。 | `Runtime/Text/LocalizationFormatter.cs`、`Runtime/Core/Localization.cs`、`Runtime/Components/LocalizeText.cs`（formatArgs 可能需扩展为支持命名） |
-| **B2-doc** | 修正复数相关注释/文档 | CHANGELOG/README 写了「复数预留扩展点」，实际**无任何抽象**。需改为「暂不支持，规划中」。或预留 `IPluralRuleProvider` 空接口。 | `CHANGELOG.md`、`README.md`、可选 `Runtime/Text/IPluralRuleProvider.cs` |
-| **B3-doc** | 修正 RTL 相关注释/文档 | `LanguageInfo.IsRightToLeft` 字段被定义但**全仓库无代码消费**。需在 `LocalizeText.ApplyToTarget` 里根据 `IsRightToLeft` 设置 `tmpText.isRightToLeft = true`（TMP 支持），或明确文档「RTL 仅标记，需调用方处理」。 | `Runtime/Components/LocalizeText.cs`、`README.md` |
-| **E3** | 补全 `SystemLanguageToCode` 映射 | `LocalizationPrefs.SystemLanguageToCode` 葡语只映射 pt-PT（巴西需 pt-BR），越南语/泰语/土耳其语/印地语回退 en-US。补全常见语言。 | `Runtime/Persistence/LocalizationPrefs.cs` |
-
-**B1 命名占位符实现建议**：
-```csharp
-// LocalizationFormatter 新增方法
-public static string FormatNamed(string template, CultureInfo culture, IDictionary<string,object> args)
-{
-    // 正则匹配 {name}，用 args[name].ToString(culture) 替换
-    // 同时保留对 {0} 位置占位的兼容（可混合）
-}
-// Localization 新增
-public static string Get(string key, IDictionary<string,object> namedArgs)
-```
-注意：Demo 和现有 JSON 用的都是 `{0}` 位置占位，实现命名占位符时要**向后兼容**，不破坏现有 `{0}` 用法。
+> 本节为历史记录。已交付：B1 命名占位符（`{name}`，正则实现，向后兼容 `{0}`）、B3 RTL 接入（TMP isRightToLeft）、B2 复数文档修正、E3 SystemLanguageToCode 映射补全。详见上方「已完成迭代详情」。
 
 ---
 
@@ -194,13 +185,14 @@ Demo/                            DemoController.cs, DemoScene.unity
 ## 八、下次会话快速继续指引
 
 1. **读本文档**了解进度与决策
-2. **下一个任务是迭代 3**（命名占位符 + 修文档）
+2. **下一个任务是迭代 4**（性能优化：C2 TextAsset 卸载 > C4 缓存 LanguageInfo > C3 路径拼接 > C1 资源缓存 > D7 表格虚拟滚动）
 3. 关键文件优先读：
-   - `Runtime/Text/LocalizationFormatter.cs`（B1 命名占位符实现位置）
-   - `Runtime/Core/Localization.cs`（Get 重载新增）
-   - `CHANGELOG.md` / `README.md`（B2/B3 文档修正）
-4. 用户已验证：阶段 0-4 + 迭代 1 + 迭代 2 功能 OK，Demo 字体用 AlibabaPuHuiTi-2-75-SemiBold，按钮点击/语言切换正常
-5. **不要重复已完成的工作**；迭代 1/2 的 bug 修复已落地，勿回退
+   - `Runtime/Loader/ResourcesLocalizationLoader.cs`（C1/C2 优化位置）
+   - `Runtime/Core/Localization.cs`（C4/C5 优化位置）
+   - `Runtime/Util/LocalizationPaths.cs`（C3 路径拼接）
+4. 用户已验证：阶段 0-4 + 迭代 1 + 迭代 2 + 迭代 3 功能 OK，Demo 字体用 AlibabaPuHuiTi-2-75-SemiBold，按钮点击/语言切换正常
+5. **不要重复已完成的工作**；迭代 1/2/3 的修复与功能已落地，勿回退
+6. 已知限制：`Get(key, null)` 多重载歧义（迭代 3 引入），调用方应避免传 null
 
 ---
 

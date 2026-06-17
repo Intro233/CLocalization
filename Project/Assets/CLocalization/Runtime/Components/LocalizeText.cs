@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -20,10 +21,13 @@ namespace CLocalization
         [SerializeField] private Text uiText;
 
         [Header("插值参数")]
-        [Tooltip("格式化参数（对应 {0}/{1}... 占位符）。运行时也可通过 SetArgs 设置。")]
+        [Tooltip("格式化参数（对应 {0}/{1}... 位置占位符）。运行时也可通过 SetArgs 设置。")]
         [SerializeField] private string[] formatArgs;
 
-        /// <summary>格式化参数读写访问。</summary>
+        /// <summary>命名占位符参数（对应 {name} 占位符）。运行时通过 SetNamedArgs 设置（不序列化到 Inspector）。</summary>
+        private Dictionary<string, object> _namedArgs;
+
+        /// <summary>格式化参数读写访问（位置占位 {0}）。</summary>
         public string[] FormatArgs
         {
             get => formatArgs;
@@ -33,6 +37,9 @@ namespace CLocalization
                 if (isActiveAndEnabled) ApplyLocalization();
             }
         }
+
+        /// <summary>命名占位符参数读写访问（命名占位 {name}）。</summary>
+        public IReadOnlyDictionary<string, object> NamedArgs => _namedArgs;
 
         protected override void OnEnable()
         {
@@ -59,8 +66,24 @@ namespace CLocalization
 
             // 取原始文本（含缺失回退逻辑）
             string text;
-            if (formatArgs != null && formatArgs.Length > 0)
+            // 取原始文本（含缺失回退逻辑），按参数类型选择插值方式
+            string text;
+            bool hasPositional = formatArgs != null && formatArgs.Length > 0;
+            bool hasNamed = _namedArgs != null && _namedArgs.Count > 0;
+
+            if (hasNamed && hasPositional)
             {
+                // 混合占位：命名 {name} + 位置 {0} 共存
+                text = Localization.Get(localizationKey, _namedArgs, formatArgs);
+            }
+            else if (hasNamed)
+            {
+                // 仅命名占位 {name}
+                text = Localization.Get(localizationKey, _namedArgs);
+            }
+            else if (hasPositional)
+            {
+                // 仅位置占位 {0}
                 text = Localization.Get(localizationKey, formatArgs);
             }
             else
@@ -71,23 +94,67 @@ namespace CLocalization
             ApplyToTarget(text);
         }
 
-        /// <summary>把文本写入目标组件（TMP 优先）。</summary>
+        /// <summary>把文本写入目标组件（TMP 优先），并根据当前语言应用 RTL 设置。</summary>
         private void ApplyToTarget(string text)
         {
+            // 根据当前语言的 RTL 标志调整排版（TMP 支持 isRightToLeft）
+            bool isRtl = Localization.IsInitialized && Localization.CurrentLanguage != null
+                         && Localization.CurrentLanguage.IsRightToLeft;
+
             if (tmpText != null)
             {
+                // TMP 原生支持 RTL 文本方向
+                tmpText.isRightToLeft = isRtl;
                 tmpText.text = text;
             }
             else if (uiText != null)
             {
+                // 传统 UI.Text 无原生 RTL 支持，仅做文本设置；
+                // 完整 RTL（含 bidi 文本整形）需调用方自行处理，或使用 TMP。
                 uiText.text = text;
             }
         }
 
-        /// <summary>运行时动态设置参数并刷新（便捷方法）。</summary>
+        /// <summary>运行时动态设置【位置占位】参数并刷新（便捷方法）。</summary>
         public void SetArgs(params string[] args)
         {
             FormatArgs = args;
+        }
+
+        /// <summary>
+        /// 运行时动态设置【命名占位】参数并刷新。对应模板中的 {name} 占位符。
+        /// 例如：<c>SetNamedArgs(new Dictionary&lt;string,object&gt;{{ {"name","Player"} }})</c>
+        /// </summary>
+        public void SetNamedArgs(IDictionary<string, object> namedArgs)
+        {
+            _namedArgs = namedArgs != null && namedArgs.Count > 0
+                ? new Dictionary<string, object>(namedArgs)
+                : null;
+            if (isActiveAndEnabled) ApplyLocalization();
+        }
+
+        /// <summary>
+        /// 运行时动态设置【命名占位】参数（通过匿名对象属性）。
+        /// 例如：<c>SetNamedArgs(new {{ name = "Player", count = 3 }})</c>
+        /// </summary>
+        public void SetNamedArgs(object argsObject)
+        {
+            if (argsObject == null)
+            {
+                _namedArgs = null;
+            }
+            else
+            {
+                // 复用 Localization 的反射转换逻辑：构造命名字典
+                var dict = new Dictionary<string, object>();
+                foreach (var prop in argsObject.GetType().GetProperties())
+                {
+                    try { dict[prop.Name] = prop.GetValue(argsObject, null); }
+                    catch { /* 读取失败的属性跳过 */ }
+                }
+                _namedArgs = dict.Count > 0 ? dict : null;
+            }
+            if (isActiveAndEnabled) ApplyLocalization();
         }
 
         /// <summary>运行时动态设置 key（便捷方法）。</summary>

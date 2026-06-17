@@ -172,6 +172,72 @@ namespace CLocalization
         }
 
         /// <summary>
+        /// 获取 key 对应的本地化文本并执行【命名占位符】插值（{name}/{count} ... 占位符）。
+        /// 模板如 "Hello, {name}! You have {count} items."。
+        /// 字典中不存在的占位符原样保留。
+        /// </summary>
+        /// <param name="key">本地化 key</param>
+        /// <param name="namedArgs">命名占位符的值（key 为占位符名称，不含大括号）</param>
+        public static string Get(string key, IDictionary<string, object> namedArgs)
+        {
+            string raw = Resolve(key, out _);
+            if (namedArgs == null || namedArgs.Count == 0) return raw;
+            return LocalizationFormatter.FormatNamed(raw, _currentCulture, namedArgs);
+        }
+
+        /// <summary>
+        /// 获取 key 对应的本地化文本并执行【命名占位符】插值，参数通过匿名对象的属性提供。
+        /// 用法：<c>Localization.Get("greet", new { name = "Player", count = 3 })</c>，对应模板 "Hi {name}, {count} items"。
+        /// 内部通过反射读取对象属性构造字典。
+        /// </summary>
+        /// <param name="key">本地化 key</param>
+        /// <param name="argsObject">含命名属性的对象（如匿名对象）</param>
+        public static string Get(string key, object argsObject)
+        {
+            string raw = Resolve(key, out _);
+            if (argsObject == null) return raw;
+            var dict = ToNamedArgs(argsObject);
+            if (dict.Count == 0) return raw;
+            return LocalizationFormatter.FormatNamed(raw, _currentCulture, dict);
+        }
+
+        /// <summary>
+        /// 获取 key 对应的本地化文本并执行【混合占位符】插值：命名占位 {name} + 位置占位 {0} 可共存。
+        /// 例如模板 "Hello {name}, you have {0} items"。
+        /// </summary>
+        public static string Get(string key, IDictionary<string, object> namedArgs, params object[] positionalArgs)
+        {
+            string raw = Resolve(key, out _);
+            return LocalizationFormatter.FormatMixed(raw, _currentCulture, namedArgs, positionalArgs);
+        }
+
+        /// <summary>把对象（含匿名对象）的公开属性转为命名参数字典（反射）。</summary>
+        private static Dictionary<string, object> ToNamedArgs(object argsObject)
+        {
+            var dict = new Dictionary<string, object>();
+            if (argsObject == null) return dict;
+            // 若传入的本身就是字典，直接返回（便于调用方两种方式都支持）
+            if (argsObject is IDictionary<string, object> existing)
+            {
+                return new Dictionary<string, object>(existing);
+            }
+            var type = argsObject.GetType();
+            foreach (var prop in type.GetProperties())
+            {
+                try
+                {
+                    object val = prop.GetValue(argsObject, null);
+                    dict[prop.Name] = val;
+                }
+                catch
+                {
+                    // 读取失败的属性跳过
+                }
+            }
+            return dict;
+        }
+
+        /// <summary>
         /// 尝试获取 key 文本，不触发回退。成功（在【当前语言】中命中）返回 true。
         /// 注意：本方法的语义与 <see cref="Get(string)"/> 不同——Get 会回退到默认语言甚至返回 key 本身，
         /// 而 TryGet 只检查当前语言，不回退。若需要带回退且知晓是否命中，请用 Get(key, out found)。

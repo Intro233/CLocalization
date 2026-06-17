@@ -49,7 +49,7 @@ namespace CLocalization
 
         /// <summary>
         /// 将 Unity 的 SystemLanguage 枚举映射为 BCP 47 语言代码。
-        /// 仅覆盖常见语言，未覆盖的回退到 "en-US"。
+        /// 覆盖常见语言；葡萄牙语默认映射到 pt-BR（巴西，用户基数大），未覆盖的回退到 "en-US"。
         /// </summary>
         public static string SystemLanguageToCode(SystemLanguage language)
         {
@@ -73,13 +73,48 @@ namespace CLocalization
                 case SystemLanguage.Spanish:
                     return "es-ES";
                 case SystemLanguage.Portuguese:
-                    return "pt-PT";
+                    // 巴西葡语用户基数远大于欧洲，默认 pt-BR
+                    return "pt-BR";
                 case SystemLanguage.Russian:
                     return "ru-RU";
                 case SystemLanguage.Italian:
                     return "it-IT";
                 case SystemLanguage.Arabic:
                     return "ar-SA";
+                case SystemLanguage.Dutch:
+                    return "nl-NL";
+                case SystemLanguage.Polish:
+                    return "pl-PL";
+                case SystemLanguage.Swedish:
+                    return "sv-SE";
+                case SystemLanguage.Thai:
+                    return "th-TH";
+                case SystemLanguage.Turkish:
+                    return "tr-TR";
+                case SystemLanguage.Vietnamese:
+                    return "vi-VN";
+                case SystemLanguage.Indonesian:
+                    return "id-ID";
+                case SystemLanguage.Hindi:
+                    return "hi-IN";
+                case SystemLanguage.Czech:
+                    return "cs-CZ";
+                case SystemLanguage.Hungarian:
+                    return "hu-HU";
+                case SystemLanguage.Danish:
+                    return "da-DK";
+                case SystemLanguage.Finnish:
+                    return "fi-FI";
+                case SystemLanguage.Norwegian:
+                    return "nb-NO";
+                case SystemLanguage.Hebrew:
+                    return "he-IL";
+                case SystemLanguage.Ukrainian:
+                    return "uk-UA";
+                case SystemLanguage.Romanian:
+                    return "ro-RO";
+                case SystemLanguage.Greek:
+                    return "el-GR";
                 default:
                     return "en-US";
             }

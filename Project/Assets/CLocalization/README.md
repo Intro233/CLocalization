@@ -106,12 +106,38 @@ CLocalization/
 | API | 说明 |
 |---|---|
 | `Localization.Get(key)` | 获取本地化文本，缺失回退到默认语言，再回退返回 key 本身 |
-| `Localization.Get(key, args)` | 带参数插值 |
-| `Localization.TryGet(key, out value)` | 不回退，返回是否存在 |
+| `Localization.Get(key, out bool found)` | 同上，并返回是否真正命中（非回退） |
+| `Localization.Get(key, params object[] args)` | 位置占位符插值（`{0}` `{1}` ...） |
+| `Localization.Get(key, IDictionary<string,object>)` | 命名占位符插值（`{name}` `{count}` ...） |
+| `Localization.Get(key, object argsObject)` | 命名占位符插值，参数用匿名对象（`new { name="x" }`） |
+| `Localization.Get(key, IDictionary, params object[])` | 混合占位符（命名 + 位置共存） |
+| `Localization.TryGet(key, out value)` | 仅查当前语言，不回退，返回是否存在 |
 | `Localization.GetAsset<T>(key)` | 加载当前语言的本地化资源（Sprite/Audio/Font） |
 | `Localization.SetLanguage(code)` | 切换语言并触发 OnLanguageChanged 事件 |
-| `Localization.CurrentLanguage` | 当前语言信息 |
+| `Localization.CurrentLanguage` | 当前语言信息（含 IsRightToLeft，LocalizeText 据此设置 RTL） |
 | `Localization.OnLanguageChanged` | 语言切换事件（Localize 组件已自动订阅） |
+
+### 占位符插值
+
+支持两类占位符，可混合使用：
+
+```csharp
+// 位置占位 {0}/{1}：模板 "你好,{0}！欢迎来到 {1}。"
+Localization.Get("greet", "玩家", "Unity");
+
+// 命名占位 {name}/{count}：模板 "Hello {name}, you have {count} items."
+Localization.Get("msg", new { name = "Player", count = 3 });
+
+// 命名占位（字典形式）
+var dict = new Dictionary<string, object> { { "name", "Player" }, { "count", 3 } };
+Localization.Get("msg", dict);
+
+// 混合：模板 "Hello {name}, you have {0} items."
+Localization.Get("msg", new { name = "Player" }, 3);
+
+// 组件方式：给 LocalizeText 设命名参数后自动刷新
+localizeText.SetNamedArgs(new { name = "Player", count = 3 });
+```
 
 ### 资源加载层（可扩展）
 
@@ -178,6 +204,25 @@ Resources/CLocalization/Assets/
 | 默认使用系统语言 | 初始化时尝试匹配操作系统语言 |
 | 回退到默认语言 | 缺失 key 时是否查默认语言 |
 | 输出缺失 key 警告 | 查询失败是否打日志 |
+
+---
+
+## 🛠️ 编辑器工具与菜单速查
+
+| 菜单 | 功能 |
+|---|---|
+| `Tools > CLocalization > Create Settings Asset` | 生成配置资源（首次必做） |
+| `Tools > CLocalization > Localization Window` | 主编辑窗口（词条/语言/导入导出/诊断） |
+| `Tools > CLocalization > Rename Key` | **key 重命名重构**（迁移 JSON + 批量更新组件引用，支持 Undo） |
+| `Tools > CLocalization > Demo > Create Demo Scene` | 生成演示场景 |
+| `Edit > Project Settings > CLocalization` | 配置面板（语言列表/默认语言/回退策略） |
+| Add Component > CLocalization > ... | 添加 Localize 组件 |
+
+**诊断 Tab 能力**：
+- 各语言翻译覆盖率（进度条 + 缺失明细）
+- **未使用 key 检测**（JSON 有但无组件/源码引用的废 key）
+
+**自动同步**：向 `Resources/CLocalization/Locales/` 拖入新 JSON 文件时，Settings 的语言列表会自动更新（merge 策略，不删除已有配置）。
 
 ---
 
