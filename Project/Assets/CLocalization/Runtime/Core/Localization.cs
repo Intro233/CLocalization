@@ -109,9 +109,10 @@ namespace CLocalization
                 }
             }
 
-            // 解析初始语言并加载
+            // 解析初始语言并加载。初始化后触发一次事件，
+            // 让所有「先于初始化激活」的组件能刷新（后激活的组件会在 OnEnable 时自行刷新）。
             string initialCode = LocalizationPrefs.ResolveInitialLanguage(settings, codes);
-            ApplyLanguage(initialCode, persist: false, fireEvent: false);
+            ApplyLanguage(initialCode, persist: false, fireEvent: true);
 
             LocalizationLog.Info($"本地化系统已初始化，当前语言: {_currentCode}");
         }
