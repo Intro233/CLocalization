@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -300,6 +301,41 @@ namespace CLocalization
             SetLanguage(_settings.DefaultLanguageCode);
         }
 
+        /// <summary>
+        /// 【异步】按语言代码切换当前语言。适用于 Addressables / 热更新等需要等待加载的场景。
+        /// 加载在后台进行，状态写入与事件触发在主线程完成（保证线程安全）。
+        /// </summary>
+        /// <param name="languageCode">语言代码</param>
+        /// <returns>是否切换成功（加载失败返回 false）。</returns>
+        public static async UniTask<bool> SetLanguageAsync(string languageCode)
+        {
+            if (!IsInitialized)
+            {
+                LocalizationLog.Warning("未初始化，无法切换语言。请先调用 Localization.Initialize。");
+                return false;
+            }
+            if (string.IsNullOrEmpty(languageCode))
+            {
+                LocalizationLog.Warning("语言代码为空，无法切换。");
+                return false;
+            }
+            if (!_settings.HasLanguage(languageCode))
+            {
+                LocalizationLog.Warning($"语言 \"{languageCode}\" 不在可用列表中，已忽略。");
+                return false;
+            }
+            if (languageCode == _currentCode) return true;
+
+            return await ApplyLanguageAsync(languageCode, persist: _settings.PersistLanguageChoice, fireEvent: true);
+        }
+
+        /// <summary>【异步】切换到默认语言。</summary>
+        public static UniTask<bool> SetDefaultLanguageAsync()
+        {
+            if (!IsInitialized) return UniTask.FromResult(false);
+            return SetLanguageAsync(_settings.DefaultLanguageCode);
+        }
+
         // ---------- 内部实现 ----------
 
         /// <summary>
@@ -316,7 +352,46 @@ namespace CLocalization
                 LocalizationLog.Warning($"语言 \"{code}\" 数据加载失败，已保持当前语言 \"{_currentCode}\"。");
                 return;
             }
+            ApplyLoadedLocale(code, locale, persist, fireEvent);
+        }
 
+        /// <summary>
+        /// 【异步】应用某语言：异步加载 locale（后台），切回主线程应用状态。
+        /// 状态写入与事件触发保证在主线程执行（线程安全）。
+        /// </summary>
+        /// <returns>是否切换成功（加载失败返回 false）。</returns>
+        private static async UniTask<bool> ApplyLanguageAsync(string code, bool persist, bool fireEvent)
+        {
+            // 1) 异步加载语言数据（可能在后台线程，如 Addressables）
+            LocaleData locale;
+            try
+            {
+                locale = await _loader.LoadLocaleAsync(code);
+            }
+            catch (Exception ex)
+            {
+                LocalizationLog.Error($"异步加载语言 \"{code}\" 异常: {ex.Message}");
+                return false;
+            }
+
+            // 2) 切回主线程后再应用状态（保证 _currentLocale 等可变字段的主线程安全）
+            await UniTask.SwitchToMainThread();
+
+            if (locale == null)
+            {
+                LocalizationLog.Warning($"语言 \"{code}\" 数据加载失败，已保持当前语言 \"{_currentCode}\"。");
+                return false;
+            }
+            ApplyLoadedLocale(code, locale, persist, fireEvent);
+            return true;
+        }
+
+        /// <summary>
+        /// 把已加载的 locale 应用到当前状态（更新 code/locale/culture/languageInfo，预加载默认语言，持久化，触发事件）。
+        /// 同步/异步路径共用。必须在主线程调用。
+        /// </summary>
+        private static void ApplyLoadedLocale(string code, LocaleData locale, bool persist, bool fireEvent)
+        {
             _currentCode = code;
             _currentLocale = locale;
             _currentCulture = LocalizationFormatter.GetCulture(code);

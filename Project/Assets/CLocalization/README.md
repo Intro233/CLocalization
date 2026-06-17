@@ -139,17 +139,42 @@ Localization.Get("msg", new { name = "Player" }, 3);
 localizeText.SetNamedArgs(new { name = "Player", count = 3 });
 ```
 
-### 资源加载层（可扩展）
+### 资源加载层（可扩展，支持异步）
 
-默认 `ResourcesLocalizationLoader` 从 `Resources/CLocalization/Locales/{code}.json` 加载。
-若需接入 Addressables 或热更新，实现 `ILocalizationLoader` 接口后传入 `Initialize`：
+默认 `ResourcesLocalizationLoader` 从 `Resources/CLocalization/Locales/{code}.json` 加载（同步瞬时）。
+若需接入 Addressables 或热更新，实现 `ILocalizationLoader` 接口的异步方法后传入 `Initialize`：
 
 ```csharp
 ILocalizationLoader myLoader = new MyAddressablesLoader();
 Localization.Initialize(settings, myLoader);
 ```
 
-运行时核心代码无需任何修改。
+**异步切换语言**（适用于 Addressables / 热更新 / 远端下载）：
+
+```csharp
+// 异步切换，加载在后台进行，状态更新与事件触发在主线程完成（线程安全）
+bool ok = await Localization.SetLanguageAsync("en-US");
+if (ok) { /* 切换成功，UI 已自动刷新 */ }
+```
+
+**自定义 Addressables Loader 示例**：
+
+```csharp
+public class AddressablesLoader : ILocalizationLoader
+{
+    public async UniTask<LocaleData> LoadLocaleAsync(string languageCode)
+    {
+        // 用 Addressables 异步加载语言 JSON
+        var handle = Addressables.LoadAssetAsync<TextAsset>($"Locales/{languageCode}");
+        var text = await handle;
+        return LocaleData.FromJson(text.text);
+    }
+    // LoadAssetAsync<T> 同理用 Addressables.LoadAssetAsync
+    // 同步方法（LoadLocale/LoadAsset）可抛 NotSupportedException，因为 Addressables 不支持同步
+}
+```
+
+> 主线程安全：`SetLanguageAsync` 内部用 `UniTask.SwitchToMainThread()` 保证状态写入与事件触发在主线程执行，异步 Loader 可安全地在后台线程加载。
 
 ---
 

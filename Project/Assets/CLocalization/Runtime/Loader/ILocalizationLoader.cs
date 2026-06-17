@@ -1,35 +1,50 @@
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace CLocalization
 {
     /// <summary>
     /// 本地化数据加载接口。抽象资源加载层，使运行时不绑定具体加载方式。
-    /// 默认提供 <see cref="ResourcesLocalizationLoader"/>（Resources 直接加载）。
-    /// 若项目未来引入 Addressables 或热更新，只需实现本接口并注入到 <see cref="Localization.Initialize"/>，
-    /// 运行时核心代码无需修改。
+    /// 同时提供同步与异步两套加载方法：
+    ///  - 同步方法适用于 Resources 等瞬时加载场景（默认实现 <see cref="ResourcesLocalizationLoader"/>）。
+    ///  - 异步方法适用于 Addressables / 热更新 / 远端下载等需要等待的场景。
+    /// 接入 Addressables 时实现本接口的异步方法即可，运行时核心通过 <see cref="Localization.SetLanguageAsync"/> 调用。
     /// </summary>
     public interface ILocalizationLoader
     {
+        // ---------- 同步加载（Resources 等瞬时场景） ----------
+
         /// <summary>
-        /// 加载指定语言的文本数据。
+        /// 【同步】加载指定语言的文本数据。
         /// </summary>
         /// <param name="languageCode">语言代码，如 zh-CN</param>
         /// <returns>反序列化后的语言数据；若文件不存在或解析失败返回 null。</returns>
         LocaleData LoadLocale(string languageCode);
 
         /// <summary>
-        /// 加载指定语言、指定 key 对应的本地化资源（Sprite/AudioClip/Font 等）。
+        /// 【同步】加载指定语言、指定 key 对应的本地化资源（Sprite/AudioClip/Font 等）。
         /// </summary>
-        /// <typeparam name="T">资源类型（需继承 UnityEngine.Object）</typeparam>
-        /// <param name="key">资源 key</param>
-        /// <param name="languageCode">语言代码</param>
-        /// <returns>资源对象；找不到返回 null。</returns>
         T LoadAsset<T>(string key, string languageCode) where T : Object;
 
         /// <summary>
-        /// 获取该 Loader 实际可用的所有语言代码（例如扫描 Resources 目录或远端清单）。
+        /// 获取该 Loader 实际可用的所有语言代码。
         /// </summary>
         IReadOnlyList<string> GetAvailableLanguageCodes();
+
+        // ---------- 异步加载（Addressables / 热更新场景） ----------
+
+        /// <summary>
+        /// 【异步】加载指定语言的文本数据。
+        /// 异步实现可在后台线程/远端拉取，结果由调用方在主线程应用。
+        /// Resources 实现可用 <c>UniTask.FromResult</c> 直接返回同步结果。
+        /// </summary>
+        /// <param name="languageCode">语言代码</param>
+        UniTask<LocaleData> LoadLocaleAsync(string languageCode);
+
+        /// <summary>
+        /// 【异步】加载指定语言、指定 key 的本地化资源。
+        /// </summary>
+        UniTask<T> LoadAssetAsync<T>(string key, string languageCode) where T : Object;
     }
 }

@@ -3,7 +3,7 @@
 > **用途**：本文件记录 CLocalization 多语言插件的开发进度、已确认决策、剩余迭代任务。
 > 下次会话从本文件同步进度，可直接继续。
 >
-> **最后更新**：迭代 4 完成（性能优化）
+> **最后更新**：迭代 5 完成（UniTask 异步加载）—— **所有规划迭代全部完成**
 
 ---
 
@@ -47,7 +47,9 @@
 | **迭代 2** | **编辑器缺口补全** | ✅ 已完成 |
 | **迭代 3** | **功能真实性（命名占位符 + RTL + 修文档）** | ✅ 已完成 |
 | **迭代 4** | **性能优化** | ✅ 已完成 |
-| **迭代 5** | UniTask 异步加载架构升级 | ⬜ 待做 |
+| **迭代 5** | **UniTask 异步加载架构升级** | ✅ 已完成 |
+
+> 🎉 所有规划迭代（阶段 0-4 + 迭代 1-5）全部完成。
 
 ---
 
@@ -113,29 +115,21 @@
 
 ---
 
-### 迭代 5：UniTask 异步加载架构升级（优先级：按需，改动最大）
+### 迭代 5：UniTask 异步加载架构升级 —— ✅ 已完成
 
-**目标**：真正接通 Addressables/热更新能力。
+> 本节为历史记录。已交付：引入 UniTask 包、`ILocalizationLoader` 加异步方法、`ResourcesLocalizationLoader` 用 FromResult 实现、`Localization.SetLanguageAsync`/`ApplyLanguageAsync`、`UniTask.SwitchToMainThread` 保证主线程安全、README 异步用法文档。同步 API 完全向后兼容。
 
-> ⚠️ 这是架构性改动，影响运行时核心，需谨慎。前置：通过 Package Manager 引入 UniTask 包。
+**已实现的关键点**：
+- `ILocalizationLoader` 新增 `LoadLocaleAsync`/`LoadAssetAsync`（保留同步方法）
+- `Localization` 抽取共享 `ApplyLoadedLocale`，同步/异步路径复用状态应用逻辑
+- 异步路径：`await loader.LoadLocaleAsync` → `await UniTask.SwitchToMainThread()` → 主线程应用状态
+- `ResourcesLocalizationLoader` 异步用 `UniTask.FromResult` 包装（Resources 瞬时操作）
 
-| 步骤 | 任务 | 技术点 |
-|---|---|---|
-| 1 | 引入 UniTask 包 | manifest.json 加 `com.cysharp.unitask`，asmdef 加引用 |
-| 2 | `ILocalizationLoader` 加异步接口 | 新增 `UniTask<LocaleData> LoadLocaleAsync(string code)` 和 `UniTask<T> LoadAssetAsync<T>(...)`，保留同步方法 |
-| 3 | `ResourcesLocalizationLoader` 实现异步 | 用 `UniTask.FromResult` 包装同步结果，满足新接口 |
-| 4 | `Localization` 加 `ApplyLanguageAsync` | `ApplyLanguage` 的异步版本，`await loader.LoadLocaleAsync`；同步 `SetLanguage` 保留（内部可调异步并 fire-and-forget 或阻塞） |
-| 5 | 多线程安全（A2） | 异步回调可能在后台线程写 `_currentLocale`。需把状态写入收敛到主线程（UniTask 主线程切换），或加同步。见审查 #A2 |
-| 6 | （可选）提供 Addressables 实现示例 | 新增 `AddressablesLocalizationLoader` 作为可选实现，证明接口可用 |
-| 7 | 文档更新 | README 说明异步用法、Addressables 接入方式 |
-
-**关键风险**：
-- `ApplyLanguage` 现在是同步的，`Initialize` 和 `SetLanguage` 都依赖它。改异步后，`SetLanguage` 的调用方若不 await，可能出现「切换中」的中间态。需设计好同步/异步双 API 并明确文档。
-- 多线程写静态状态（#A2）——必须保证 `Localization` 的可变字段写入在主线程（用 `UniTask.SwitchToMainThread` 或把异步加载结果通过主线程回调应用）。
+**破坏性变更**：自写 `ILocalizationLoader` 实现需补两个异步方法（内置 Resources 实现已就绪）。
 
 ---
 
-## 六、当前文件清单（迭代 2 结束时）
+## 六、当前文件清单（迭代 5 结束时）
 
 ### Runtime（16 个 .cs）
 ```
@@ -181,16 +175,16 @@ Demo/                            DemoController.cs, DemoScene.unity
 
 ## 八、下次会话快速继续指引
 
-1. **读本文档**了解进度与决策
-2. **下一个任务是迭代 5**（UniTask 异步加载架构升级）—— 这是最后一个迭代，改动最大，需引入 UniTask 包并重构 Loader 接口为异步，详见下方「迭代 5」详情块
-3. 关键文件优先读：
-   - `Runtime/Loader/ILocalizationLoader.cs`（接口改造）
-   - `Runtime/Loader/ResourcesLocalizationLoader.cs`（异步实现）
-   - `Runtime/Core/Localization.cs`（ApplyLanguageAsync）
-   - `Project/Packages/manifest.json`（加 UniTask 包）
-4. 用户已验证：阶段 0-4 + 迭代 1-4 全部 OK，Demo 字体用 AlibabaPuHuiTi-2-75-SemiBold
-5. **不要重复已完成的工作**；迭代 1-4 的修复与优化已落地，勿回退
-6. 已知限制：`Get(key, null)` 多重载歧义（迭代 3 引入），调用方应避免传 null
+1. **所有规划迭代（阶段 0-4 + 迭代 1-5）已全部完成** 🎉
+2. **下一步可选方向**（非规划内，按需）：
+   - 真正接入 Addressables（提供 `AddressablesLocalizationLoader` 具体实现，需项目已装 Addressables 包）
+   - 复数（Pluralization）/ 完整 RTL（bidi 文本整形）
+   - LocalizeTextDrawer 复用迭代 2 抽取的 `LocalizeKeyFieldDrawer`（技术债 #1）
+   - 验证 UniTask 异步路径（需用户打开 Unity 拉取 UniTask 包后测试 `SetLanguageAsync`）
+3. **⚠️ 重要：用户首次打开 Unity 时**，需联网拉取 UniTask 包（manifest.json 已加 Git URL），等待解析完成。若 Git 未安装或网络不通，UniTask 包会安装失败，此时异步 API 不可用——可回退去掉 manifest 的 UniTask 行恢复纯同步。
+4. 用户已验证：阶段 0-4 + 迭代 1-4 功能 OK，Demo 字体用 AlibabaPuHuiTi-2-75-SemiBold。迭代 5（异步）需用户打开 Unity 拉取 UniTask 后验证编译。
+5. **不要重复已完成的工作**；迭代 1-5 的修复/功能/优化已落地，勿回退。
+6. 已知限制：`Get(key, null)` 多重载歧义（迭代 3 引入），调用方应避免传 null。
 
 ---
 

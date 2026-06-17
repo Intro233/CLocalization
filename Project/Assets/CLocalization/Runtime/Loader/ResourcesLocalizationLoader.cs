@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace CLocalization
@@ -7,7 +8,8 @@ namespace CLocalization
     /// 基于 Resources 的本地化加载器（默认实现）。
     /// 文本：从 Resources/CLocalization/Locales/{code}.json 加载（以 TextAsset 形式读取）。
     /// 资源：从 Resources/CLocalization/Assets/{code}/{key} 加载。
-    /// 该实现零额外依赖，适合中小型项目。大型项目可改用 Addressables 实现本接口。
+    /// 同步加载瞬时完成；异步方法用 <see cref="UniTask.FromResult"/> 包装同步结果，满足接口契约。
+    /// 大型项目可改用 Addressables 实现本接口的异步方法。
     /// </summary>
     public class ResourcesLocalizationLoader : ILocalizationLoader
     {
@@ -83,6 +85,25 @@ namespace CLocalization
                 }
             }
             return codes;
+        }
+
+        // ---------- 异步加载（Resources 是瞬时操作，用 UniTask.FromResult 包装同步结果） ----------
+
+        /// <summary>
+        /// 【异步】加载语言文本。Resources 加载是同步瞬时操作，直接包装同步结果。
+        /// Addressables 实现可在此做真正的异步加载。
+        /// </summary>
+        public UniTask<LocaleData> LoadLocaleAsync(string languageCode)
+        {
+            return UniTask.FromResult(LoadLocale(languageCode));
+        }
+
+        /// <summary>
+        /// 【异步】加载本地化资源。Resources 加载是同步瞬时操作，直接包装同步结果。
+        /// </summary>
+        public UniTask<T> LoadAssetAsync<T>(string key, string languageCode) where T : Object
+        {
+            return UniTask.FromResult(LoadAsset<T>(key, languageCode));
         }
 
         /// <summary>清空已缓存的语言文本（切换 Loader 或热更新数据后调用）。</summary>

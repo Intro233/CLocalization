@@ -2,7 +2,8 @@
     "name": "CLocalization.Runtime",
     "rootNamespace": "CLocalization",
     "references": [
-        "Unity.TextMeshPro"
+        "Unity.TextMeshPro",
+        "UniTask"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

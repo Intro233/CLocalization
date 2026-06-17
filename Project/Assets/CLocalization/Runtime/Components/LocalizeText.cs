@@ -63,9 +63,7 @@ namespace CLocalization
         public override void ApplyLocalization()
         {
             if (string.IsNullOrEmpty(localizationKey)) return;
-
-            // 取原始文本（含缺失回退逻辑）
-            string text;
+            
             // 取原始文本（含缺失回退逻辑），按参数类型选择插值方式
             string text;
             bool hasPositional = formatArgs != null && formatArgs.Length > 0;
@@ -104,7 +102,7 @@ namespace CLocalization
             if (tmpText != null)
             {
                 // TMP 原生支持 RTL 文本方向
-                tmpText.isRightToLeft = isRtl;
+                tmpText.isRightToLeftText = isRtl;
                 tmpText.text = text;
             }
             else if (uiText != null)

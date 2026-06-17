@@ -6,6 +6,29 @@
 
 ---
 
+## [2.0.0] - 2026-06-17
+
+迭代 5：UniTask 异步加载架构升级（重大能力升级，向后兼容）。
+
+### 新增
+- **异步加载接口**：`ILocalizationLoader` 新增 `LoadLocaleAsync` / `LoadAssetAsync`（基于 UniTask），支持 Addressables / 热更新 / 远端下载。同步方法保留（Resources 场景）。
+- **异步语言切换**：`Localization.SetLanguageAsync(code)` / `SetDefaultLanguageAsync()`，返回 `UniTask<bool>`。加载在后台，状态写入与事件触发在主线程（`UniTask.SwitchToMainThread` 保证线程安全）。
+- `ResourcesLocalizationLoader` 异步方法用 `UniTask.FromResult` 包装同步结果。
+- 依赖：引入 `com.cysharp.unitask`（Git URL）。
+
+### 主线程安全
+- 异步路径状态写入（`_currentLocale` 等）与 `OnLanguageChanged` 事件触发统一在主线程执行，异步 Loader 可安全地在后台线程加载。
+
+### 向后兼容
+- 同步 API（`SetLanguage` / `Initialize` / Resources 加载）完全不变；不使用异步的项目无需改动。
+- 旧的同步 `ILocalizationLoader` 实现需补两个异步方法（Resources 实现已内置，Addressables 实现按需）。
+
+### 破坏性变更
+- `ILocalizationLoader` 接口新增两个异步方法签名：自定义实现的 Loader 需补充 `LoadLocaleAsync` / `LoadAssetAsync`（仅影响自写 Loader 的用户，内置 Resources 实现已就绪）。
+- 依赖新增 UniTask 包（首次打开 Unity 需联网拉取）。
+
+---
+
 ## [1.2.0] - 2026-06-17
 
 迭代 4：性能优化（减少热路径 GC 分配与内存累积）。
