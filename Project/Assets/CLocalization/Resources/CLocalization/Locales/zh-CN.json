@@ -5,8 +5,6 @@
     "version": "1.0.0"
   },
   "entries": {
-    "app.title": "CLocalization 多语言示例",
-    "app.subtitle": "一个轻量级 Unity 多语言插件",
     "common.ok": "确定",
     "common.cancel": "取消",
     "common.confirm": "确认",
@@ -16,13 +14,15 @@
     "common.exit": "退出",
     "ui.language.label": "当前语言",
     "ui.language.switch": "切换语言",
-    "ui.text.demo": "这是本地化文本示例。",
     "ui.text.parameter": "你好,{0}！欢迎来到 {1}。",
-    "ui.text.number": "数字格式示例:{0:N0}",
+    "ui.text.number": "数字格式:{0:N0}",
     "ui.text.currency": "价格:{0:C}",
     "ui.text.date": "今天日期:{0:D}",
-    "ui.image.demo": "（本地化图片示例）",
-    "ui.font.demo": "字体本地化示例",
-    "demo.hint": "点击下方按钮切换语言，观察文本/图片/字体的变化。"
+    "demo.title": "CLocalization 多语言插件演示",
+    "demo.subtitle": "点击下方按钮切换语言，文本将自动刷新",
+    "demo.current": "当前语言",
+    "demo.parameter": "参数插值示例",
+    "demo.format": "格式化示例（数字 / 货币 / 日期）",
+    "demo.hint": "切换语言后，所有挂载 Localize 组件的 UI 都会自动更新；插值与格式化按当前语言区域显示。"
   }
 }

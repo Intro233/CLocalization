@@ -5,8 +5,6 @@
     "version": "1.0.0"
   },
   "entries": {
-    "app.title": "CLocalization Demo",
-    "app.subtitle": "A lightweight Unity localization plugin",
     "common.ok": "OK",
     "common.cancel": "Cancel",
     "common.confirm": "Confirm",
@@ -16,13 +14,15 @@
     "common.exit": "Exit",
     "ui.language.label": "Current Language",
     "ui.language.switch": "Switch Language",
-    "ui.text.demo": "This is a localized text sample.",
     "ui.text.parameter": "Hello, {0}! Welcome to {1}.",
     "ui.text.number": "Number format: {0:N0}",
     "ui.text.currency": "Price: {0:C}",
     "ui.text.date": "Today: {0:D}",
-    "ui.image.demo": "(Localized image sample)",
-    "ui.font.demo": "Font localization sample",
-    "demo.hint": "Click the buttons below to switch language and observe changes to text/image/font."
+    "demo.title": "CLocalization Plugin Demo",
+    "demo.subtitle": "Click the buttons below to switch language, text updates automatically",
+    "demo.current": "Current Language",
+    "demo.parameter": "Parameter Interpolation Sample",
+    "demo.format": "Format Sample (Number / Currency / Date)",
+    "demo.hint": "After switching language, all UI with Localize components update automatically; interpolation and formatting follow the current language's culture."
   }
 }

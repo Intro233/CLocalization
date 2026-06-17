@@ -5,8 +5,6 @@
     "version": "1.0.0"
   },
   "entries": {
-    "app.title": "CLocalization 多言語サンプル",
-    "app.subtitle": "軽量な Unity 多言語プラグイン",
     "common.ok": "OK",
     "common.cancel": "キャンセル",
     "common.confirm": "確認",
@@ -16,13 +14,15 @@
     "common.exit": "終了",
     "ui.language.label": "現在の言語",
     "ui.language.switch": "言語切替",
-    "ui.text.demo": "これはローカライズテキストのサンプルです。",
     "ui.text.parameter": "こんにちは、{0}！{1}へようこそ。",
     "ui.text.number": "数値フォーマット：{0:N0}",
     "ui.text.currency": "価格：{0:C}",
     "ui.text.date": "今日の日付：{0:D}",
-    "ui.image.demo": "（ローカライズ画像サンプル）",
-    "ui.font.demo": "フォントローカライズサンプル",
-    "demo.hint": "下のボタンをクリックして言語を切り替え、テキスト/画像/フォントの変化を確認してください。"
+    "demo.title": "CLocalization プラグインデモ",
+    "demo.subtitle": "下のボタンをクリックして言語を切り替えると、テキストが自動更新されます",
+    "demo.current": "現在の言語",
+    "demo.parameter": "パラメータ補間サンプル",
+    "demo.format": "フォーマットサンプル（数値 / 通貨 / 日付）",
+    "demo.hint": "言語切替後、Localize コンポーネントをアタッチした UI はすべて自動更新されます。補間とフォーマットは現在の言語のカルチャに従います。"
   }
 }
