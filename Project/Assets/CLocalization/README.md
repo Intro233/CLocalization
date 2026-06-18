@@ -3,24 +3,26 @@
 一个轻量级、易用的 Unity 多语言（本地化）插件。
 
 支持文本、图片、音频、字体的本地化，提供完整的编辑器工具与 Excel/CSV 协作工作流。
-零第三方依赖（运行时仅依赖 Newtonsoft.Json），适合中小型到中大型项目。
+运行时依赖 Newtonsoft.Json（JSON 序列化）与 UniTask（异步加载），适合中小型到中大型项目。
 
 ---
 
 ## ✨ 特性
 
-- **文本本地化**：TextMeshPro 与传统 UI.Text 双支持，参数插值（`{0}`/`{name}`），日期/货币/数字按语言区域格式化。
+- **文本本地化**：TextMeshPro 与传统 UI.Text 双支持，参数插值（`{0}` 位置占位 / `{name}` 命名占位，可混合），日期/货币/数字按语言区域格式化，RTL（从右到左）方向支持。
 - **资源本地化**：Sprite、AudioClip、Font / TMP_FontAsset 可按语言切换。
 - **UI 自动刷新**：挂载 `Localize*` 组件即可，切换语言时自动更新，无需手动调接口。
-- **静态 API**：`Localization.Get("key")` 全局访问，调用极简。
-- **资源加载抽象**：默认 `Resources` 加载，预留 `Addressables`/热更新接口，运行时核心不绑定具体加载方式。
+- **静态 API**：`Localization.Get("key")` 全局访问，调用极简；命名/位置/混合占位符多重重载。
+- **可配置资源加载方式**：内置 `Resources`（默认）/ `StreamingAssets` 两种模式，路径完全可配，切换时自动迁移已有文件；支持异步加载（Addressables / 热更新可通过实现 `ILocalizationLoader` 接入，主线程安全）。
 - **完整编辑器工具**：
   - 多语言编辑窗口（`Tools > CLocalization > Localization Window`）
-  - 词条编辑表（搜索、增删、单元格编辑、未翻译高亮）
-  - 翻译完整性诊断（各语言覆盖率、缺失明细）
+  - 词条编辑表（搜索、增删、单元格编辑、未翻译高亮、表头点击排序、可拖拽列宽、多行编辑、批量填充/删除、仅看未翻译、复制 key、分页）
+  - 翻译完整性诊断（各语言覆盖率、缺失明细、未使用 key 检测、缺失项一键跳转编辑）
   - CSV 导入导出（与翻译人员用 Excel 协作）
-  - Localize 组件 Inspector 增强（key 下拉选择 + 预览）
-- **持久化**：自动记住用户上次选择的语言，支持系统语言自动检测。
+  - Key 重命名重构（迁移 JSON + 批量更新场景/Prefab 引用，支持 Undo）
+  - Localize 组件 Inspector 增强（key 弹出搜索窗口 + 预览语言可切换 + 插值参数预览）
+  - 快捷键（Ctrl/Cmd+S 保存、Ctrl/Cmd+F 聚焦搜索、Delete 删选中）
+- **持久化**：自动记住用户上次选择的语言，支持系统语言自动检测（覆盖中/英/日/韩/越/泰/土耳其/印地等数十种）。
 
 ---
 
@@ -30,9 +32,10 @@
 
 - Unity **2022.3 LTS** 及以上
 - `com.unity.textmeshpro` 3.0.x（UI 文本本地化）
-- `com.unity.nuget.newtonsoft-json` 3.2.x（已写入 manifest.json，自动引入）
+- `com.unity.nuget.newtonsoft-json` 3.2.x（运行时 JSON 序列化，支持 Dictionary）
+- `com.cysharp.unitask`（异步加载，UniTask，Git 引用，已写入 manifest.json）
 
-> 首次打开工程时，Unity 会自动下载 Newtonsoft.Json 包。
+> 首次打开工程时，Unity 会自动下载 Newtonsoft.Json 与 UniTask 包（需本机装有 Git 且网络可达 GitHub）。
 
 ---
 
@@ -83,19 +86,21 @@ Localization.SetLanguage("en-US");
 CLocalization/
 ├── Runtime/                     # 运行时核心（CLocalization.Runtime 程序集）
 │   ├── Core/                    # Localization 静态入口 / Settings / 数据结构 / 初始化器
-│   ├── Loader/                  # ILocalizationLoader 抽象 + Resources 实现
-│   ├── Text/                    # LocalizationFormatter（插值 + 格式化）
-│   ├── Components/              # LocalizeText/Sprite/AudioSource/Font + LocalizeBase
-│   ├── Persistence/             # PlayerPrefs 持久化 + 系统语言检测
+│   ├── Loader/                  # ILocalizationLoader 抽象 + AssetLoadMode 枚举
+│   │   ├── ResourcesLocalizationLoader.cs        # Resources 加载（默认）
+│   │   └── StreamingAssetsLocalizationLoader.cs  # StreamingAssets 加载（跨平台异步）
+│   ├── Text/                    # LocalizationFormatter（位置/命名占位插值 + 格式化）
+│   ├── Components/              # LocalizeText/Sprite/AudioSource/Font + LocalizeBase（含 RTL）
+│   ├── Persistence/             # PlayerPrefs 持久化 + 系统语言检测（数十种语言映射）
 │   └── Util/                    # 日志 + 路径约定
 ├── Editor/                      # 编辑器工具（CLocalization.Editor 程序集）
-│   ├── Services/                # 数据服务 + 导入导出
-│   ├── Importer/                # CSV 读写
-│   ├── Window/                  # 主窗口 + 4 个 Tab
-│   ├── Settings/                # ProjectSettings 面板
-│   ├── Inspector/               # LocalizeText Inspector 增强
-│   └── Setup/                   # 配置生成 + Demo 场景生成
-├── Resources/CLocalization/     # 运行时数据
+│   ├── Services/                # 数据服务 + 导入导出 + 引用扫描器
+│   ├── Importer/                # CSV 读写（零依赖，RFC 4180）
+│   ├── Window/                  # 主窗口 + 词条/语言/导入导出/诊断 Tab + Key 重命名窗口
+│   ├── Settings/                # ProjectSettings 面板（含资源加载方式配置）
+│   ├── Inspector/               # LocalizeKeyFieldDrawer 共用 + 4 组件 Drawer + KeyPickerWindow
+│   └── Setup/                   # 配置生成 + 资源迁移工具 + Demo 场景 + AssetPostprocessor
+├── Resources/CLocalization/     # 运行时数据（Resources 模式）
 │   ├── Locales/*.json           # 各语言词条（zh-CN/en-US/ja-JP/ko-KR）
 │   └── LocalizationSettings.asset
 └── Demo/                        # DemoController（运行时构建演示 UI）
@@ -226,10 +231,10 @@ public class AddressablesLoader : ILocalizationLoader
 
 ## 📂 资源本地化目录约定
 
-本地化资源（Sprite/Audio/Font）按以下结构放置（Resources 加载）：
+本地化资源（Sprite/Audio/Font）按以下结构放置（Resources 模式，路径可在 Settings 的 `AssetsPath` 配置）：
 
 ```
-Resources/CLocalization/Assets/
+Resources/{assetsPath}/
 ├── zh-CN/
 │   └── ui/logo          ← key 为 ui/logo 的中文版 Sprite/...
 ├── en-US/
@@ -237,18 +242,23 @@ Resources/CLocalization/Assets/
 └── ...
 ```
 
+> 注意：Sprite/Audio/Font 等 Unity 资源仅在 **Resources** 模式下支持加载；StreamingAssets 模式仅支持文本本地化。
+
 ---
 
 ## ⚙️ 配置项（Project Settings > CLocalization）
 
 | 项 | 说明 |
 |---|---|
-| 语言列表 | 所有可切换的语言 |
+| 语言列表 | 所有可切换的语言（可上移/下移排序） |
 | 默认语言代码 | 缺失 key 的回退语言 |
 | 持久化语言选择 | 切换后是否记住到 PlayerPrefs |
 | 默认使用系统语言 | 初始化时尝试匹配操作系统语言 |
 | 回退到默认语言 | 缺失 key 时是否查默认语言 |
 | 输出缺失 key 警告 | 查询失败是否打日志 |
+| **资源加载方式** | `Resources` / `StreamingAssets`（切换时自动迁移文件） |
+| **语言路径** | `LocalesPath`，默认 `CLocalization/Locales` |
+| **资源路径** | `AssetsPath`，默认 `CLocalization/Assets`（仅 Resources 模式生效） |
 
 ---
 
@@ -260,14 +270,27 @@ Resources/CLocalization/Assets/
 | `Tools > CLocalization > Localization Window` | 主编辑窗口（词条/语言/导入导出/诊断） |
 | `Tools > CLocalization > Rename Key` | **key 重命名重构**（迁移 JSON + 批量更新组件引用，支持 Undo） |
 | `Tools > CLocalization > Demo > Create Demo Scene` | 生成演示场景 |
-| `Edit > Project Settings > CLocalization` | 配置面板（语言列表/默认语言/回退策略） |
+| `Edit > Project Settings > CLocalization` | 配置面板（语言/回退策略/资源加载方式/迁移） |
 | Add Component > CLocalization > ... | 添加 Localize 组件 |
+
+**词条 Tab 能力**：
+- 表头点击排序（Key 列升降序 / 各语言列按翻译排序，带 ▲/▼ 指示）
+- 可拖拽列宽、多行文本编辑、仅看未翻译过滤、复制 key 到剪贴板
+- 批量填充（从默认语言）、批量删除（作用于当前过滤结果）
+- 分页（每页 200 行，万 key 不卡）
+- 快捷键：Ctrl/Cmd+S 保存、Ctrl/Cmd+F 聚焦搜索、Delete 删选中行
 
 **诊断 Tab 能力**：
 - 各语言翻译覆盖率（进度条 + 缺失明细）
 - **未使用 key 检测**（JSON 有但无组件/源码引用的废 key）
+- 缺失项一键「编辑」跳转定位到词条 Tab
 
-**自动同步**：向 `Resources/CLocalization/Locales/` 拖入新 JSON 文件时，Settings 的语言列表会自动更新（merge 策略，不删除已有配置）。
+**Inspector 能力**（Localize 组件）：
+- key 选择器：输入框 + 「选择...」弹出搜索窗口（TreeView 虚拟滚动，上万 key 不卡，搜索过滤）
+- 预览语言可切换下拉 + 预览应用插值参数（所见即所得）
+- key 存在性校验提示
+
+**自动同步**：向当前模式的语言目录拖入新 JSON 文件时，Settings 的语言列表会自动更新（Resources 模式；StreamingAssets 模式需手动点「刷新语言列表」）。
 
 ---
 
