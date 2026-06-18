@@ -148,6 +148,27 @@ namespace CLocalization.Editor
 
             // 快捷键（窗口聚焦时生效）
             HandleShortcuts();
+
+            // 点击窗口空白处取消输入框聚焦（TextField 聚焦后点空白默认不会失焦）
+            // 逻辑：若 MouseDown 事件未被任何控件消费（仍为 MouseDown），说明点在了空白处
+            HandleBlankClickUnfocus();
+        }
+
+        /// <summary>
+        /// 处理空白点击取消输入框聚焦。
+        /// IMGUI 中 TextField 聚焦后点击窗口空白处默认保持聚焦，用户体验不佳。
+        /// 此方法在 OnGUI 末尾检测：若 MouseDown 事件未被任何控件 Use（说明点在空白），清除键盘焦点。
+        /// </summary>
+        private void HandleBlankClickUnfocus()
+        {
+            Event e = Event.current;
+            if (e.type == EventType.MouseDown)
+            {
+                // 点在空白处（没有控件消费 MouseDown）：清除文本焦点，让输入框失焦
+                GUI.FocusControl(null);
+                EditorGUI.FocusTextInControl(null);
+                // 不 Use 事件，避免影响其他逻辑；GUI.FocusControl(null) 会让当前聚焦的 TextField 提交编辑
+            }
         }
 
         /// <summary>处理全局快捷键：Ctrl+S 保存、Ctrl+F 聚焦搜索、Delete 删除选中 key。</summary>

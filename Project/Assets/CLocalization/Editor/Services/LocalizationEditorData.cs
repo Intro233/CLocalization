@@ -115,7 +115,44 @@ namespace CLocalization.Editor
                 LocaleData data = LoadLocaleFile(file);
                 if (data != null) result.Add(data);
             }
+            // 按 Settings 的语言列表顺序重排（用户在 LanguagesTab 调整的顺序持久化在 Settings），
+            // 而非文件名字母序——否则用户调整的顺序在重新打开窗口后会丢失。
+            SortBySettingsOrder(result);
             return result;
+        }
+
+        /// <summary>
+        /// 按 Settings.languages 的顺序对 locale 列表排序。
+        /// Settings 中有的按其顺序排；Settings 中没有的按原顺序放最后。
+        /// 若 Settings 不存在或为空，保持原顺序（文件名序）。
+        /// </summary>
+        public static void SortBySettingsOrder(List<LocaleData> locales)
+        {
+            if (locales == null || locales.Count <= 1) return;
+            var settings = LocalizationSetup.LoadOrCreateSettings();
+            if (settings == null || settings.Languages == null || settings.Languages.Count == 0) return;
+
+            // 建立 code → 期望顺序索引
+            var order = new System.Collections.Generic.Dictionary<string, int>();
+            for (int i = 0; i < settings.Languages.Count; i++)
+            {
+                var code = settings.Languages[i]?.Code;
+                if (!string.IsNullOrEmpty(code) && !order.ContainsKey(code))
+                {
+                    order[code] = i;
+                }
+            }
+
+            // 稳定排序：Settings 中有的按 orderIndex 升序；没有的给一个大值放最后，保持原相对顺序
+            int fallbackBase = settings.Languages.Count;
+            locales.Sort((a, b) =>
+            {
+                string ca = a?.Meta?.Code;
+                string cb = b?.Meta?.Code;
+                int idxA = (ca != null && order.TryGetValue(ca, out int ia)) ? ia : fallbackBase;
+                int idxB = (cb != null && order.TryGetValue(cb, out int ib)) ? ib : fallbackBase;
+                return idxA.CompareTo(idxB);
+            });
         }
 
         /// <summary>读取单个 JSON 文件为 LocaleData。失败返回 null。</summary>

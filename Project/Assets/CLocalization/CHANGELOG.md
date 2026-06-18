@@ -6,6 +6,16 @@
 
 ---
 
+## [2.2.3] - 2026-06-18
+
+语言排序持久化 + 空白点击取消输入框聚焦。
+
+### 修复
+- **语言排序未持久化**：LanguagesTab 的 ↑↓ 调整顺序后，重新打开窗口顺序丢失（回到文件名字母序）。根因：`LoadAllLocales` 按 JSON 文件名排序加载，忽略用户在 Settings 中调整的顺序。修复：`LoadAllLocales` 加载后调 `SortBySettingsOrder`，按 `Settings.languages` 列表顺序重排（Settings 顺序由 SyncSettings 持久化），Settings 没有的语言放最后。
+- **点击窗口空白处输入框不取消聚焦**：Unity IMGUI 默认 TextField 聚焦后点空白保持聚焦，体验不佳。新增 `HandleBlankClickUnfocus`：OnGUI 末尾检测未被任何控件消费的 MouseDown（即空白点击），调 `GUI.FocusControl(null)` 失焦。
+
+---
+
 ## [2.2.2] - 2026-06-18
 
 紧急修复：Excel 导出的 CSV 导入不进来。
