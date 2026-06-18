@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace CLocalization.Editor
 {
-    /// <summary>LocalizeAudioSource 的 Inspector 增强：key 下拉选择 + 校验。</summary>
+    /// <summary>LocalizeAudioSource 的 Inspector 增强：key 搜索选择 + 校验。</summary>
     [CustomEditor(typeof(LocalizeAudioSource))]
     public class LocalizeAudioSourceDrawer : UnityEditor.Editor
     {

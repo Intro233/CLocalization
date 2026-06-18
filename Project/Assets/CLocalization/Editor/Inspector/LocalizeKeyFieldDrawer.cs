@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -5,19 +6,26 @@ namespace CLocalization.Editor
 {
     /// <summary>
     /// Localize 组件 key 字段的共用绘制器。
-    /// 封装「key 下拉选择 + 手动输入 + 存在性校验 + 默认语言预览」逻辑，
+    /// 封装「key 弹出搜索选择 + 手动输入 + 存在性校验 + 可切换预览语言」逻辑，
     /// 供所有 Localize* 子类的 CustomEditor 复用，避免每个 Drawer 重复实现。
     /// </summary>
     public static class LocalizeKeyFieldDrawer
     {
+        /// <summary>当前预览语言代码（跨所有 Drawer 共享，用户切换一次后所有 Inspector 沿用）。</summary>
+        private static string _previewLanguageCode;
+
+        /// <summary>当前预览语言代码（公开访问）。</summary>
+        public static string PreviewLanguageCode => _previewLanguageCode;
+
         /// <summary>
-        /// 绘制一个可搜索的 key 选择器，并支持手动输入。
-        /// 修改后通过 SerializedProperty 回写（保证多选编辑与 Undo 正常）。
+        /// 绘制 key 字段：手动输入框 + 「选择...」按钮（点击弹出搜索窗口）+ 存在性校验。
         /// </summary>
-        /// <param name="keyProp">绑定的 key 序列化属性（如 localizationKey / fontKey）</param>
+        /// <param name="keyProp">绑定的 key 序列化属性</param>
         /// <param name="availableKeys">可选 key 列表（已排序）</param>
         /// <param name="label">字段标签</param>
-        public static void DrawKeySelector(SerializedProperty keyProp, string[] availableKeys, string label)
+        /// <param name="onKeyChanged">key 改变后的回调（可选，用于触发 Repaint 等）</param>
+        public static void DrawKeySelector(SerializedProperty keyProp, string[] availableKeys, string label,
+            System.Action onKeyChanged = null)
         {
             if (keyProp == null) return;
             string current = keyProp.stringValue;
@@ -26,25 +34,23 @@ namespace CLocalization.Editor
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                // 下拉选择（当前值在列表中的索引）
-                int currentIndex = System.Array.IndexOf(availableKeys, current);
-                int newIndex = EditorGUILayout.Popup(currentIndex >= 0 ? currentIndex : 0, availableKeys);
-                if (newIndex >= 0 && newIndex < availableKeys.Length
-                    && (currentIndex < 0 || newIndex != currentIndex))
-                {
-                    string selected = availableKeys[newIndex];
-                    // 跳过占位项 "(无可用 key)"
-                    if (selected != current && !selected.StartsWith("("))
-                    {
-                        keyProp.stringValue = selected;
-                    }
-                }
-
-                // 手动输入/编辑
+                // 手动输入/编辑（主要交互入口，可直接粘贴 key）
                 string manual = EditorGUILayout.TextField(current);
                 if (manual != current)
                 {
                     keyProp.stringValue = manual;
+                    onKeyChanged?.Invoke();
+                }
+
+                // 「选择...」按钮：弹出搜索窗口（key 多时快速选取）
+                if (GUILayout.Button("选择...", GUILayout.Width(60)))
+                {
+                    KeyPickerWindow.Pick(availableKeys, current, selected =>
+                    {
+                        keyProp.stringValue = selected;
+                        keyProp.serializedObject.ApplyModifiedProperties();
+                        onKeyChanged?.Invoke();
+                    });
                 }
             }
 
@@ -58,7 +64,64 @@ namespace CLocalization.Editor
             }
         }
 
-        /// <summary>获取所有可选 key（从磁盘加载并排序）。供 Drawer 在 OnEnable/OnInspectorGUI 调用。</summary>
+        /// <summary>
+        /// 绘制预览区：预览语言下拉 + 该 key 在所选语言中的实际文本（应用插值参数）。
+        /// </summary>
+        /// <param name="key">要预览的 key</param>
+        /// <param name="formatArgs">插值参数（位置占位 {0}），可为 null</param>
+        public static void DrawPreview(string key, string[] formatArgs = null)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+
+            var locales = LocalizationEditorData.LoadAllLocales();
+            if (locales == null || locales.Count == 0) return;
+
+            // 预览语言下拉（跨 Drawer 共享选择）
+            EnsurePreviewLanguage(locales);
+            string[] codes = GetLanguageCodes(locales);
+            int currentIdx = System.Array.IndexOf(codes, _previewLanguageCode);
+            if (currentIdx < 0) currentIdx = 0;
+
+            EditorGUILayout.Space(4);
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("预览语言", GUILayout.Width(60));
+                int newIdx = EditorGUILayout.Popup(currentIdx, codes, GUILayout.Width(120));
+                if (newIdx != currentIdx)
+                {
+                    _previewLanguageCode = codes[newIdx];
+                }
+                GUILayout.FlexibleSpace();
+            }
+
+            // 取该 key 在预览语言中的文本
+            LocaleData locale = FindLocale(locales, _previewLanguageCode);
+            if (locale == null || locale.Entries == null) return;
+            if (!locale.Entries.TryGetValue(key, out var template) || string.IsNullOrEmpty(template))
+            {
+                EditorGUILayout.HelpBox($"该 key 在 {_previewLanguageCode} 中无翻译（空或缺失）。", MessageType.Info);
+                return;
+            }
+
+            // 应用插值参数（位置占位 {0}）
+            string preview = template;
+            if (formatArgs != null && formatArgs.Length > 0)
+            {
+                try
+                {
+                    preview = string.Format(preview, formatArgs);
+                }
+                catch
+                {
+                    // 插值失败保留原模板
+                }
+            }
+
+            EditorGUILayout.LabelField($"预览（{_previewLanguageCode}）", EditorStyles.miniBoldLabel);
+            EditorGUILayout.HelpBox(preview, MessageType.None);
+        }
+
+        /// <summary>获取所有可选 key（从磁盘加载并排序）。</summary>
         public static string[] LoadAvailableKeys()
         {
             var locales = LocalizationEditorData.LoadAllLocales();
@@ -67,20 +130,35 @@ namespace CLocalization.Editor
             return keys.Count > 0 ? keys.ToArray() : new[] { "(无可用 key)" };
         }
 
-        /// <summary>获取某 key 在默认语言中的预览文本（用于 Inspector 显示）。</summary>
-        public static string GetPreview(string key)
+        /// <summary>确保预览语言已初始化（首次默认取第一个语言）。</summary>
+        private static void EnsurePreviewLanguage(List<LocaleData> locales)
         {
-            if (string.IsNullOrEmpty(key)) return "";
-            var locales = LocalizationEditorData.LoadAllLocales();
-            // 优先取第一个语言（默认约定第一个为默认语言或由 Settings 决定）
-            foreach (var locale in locales)
+            if (!string.IsNullOrEmpty(_previewLanguageCode)) return;
+            if (locales.Count > 0 && locales[0]?.Meta != null)
             {
-                if (locale?.Entries != null && locale.Entries.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v))
-                {
-                    return v;
-                }
+                _previewLanguageCode = locales[0].Meta.Code;
             }
-            return "";
+        }
+
+        /// <summary>从 locales 提取语言代码数组（用于下拉）。</summary>
+        private static string[] GetLanguageCodes(List<LocaleData> locales)
+        {
+            var codes = new string[locales.Count];
+            for (int i = 0; i < locales.Count; i++)
+            {
+                codes[i] = locales[i]?.Meta?.Code ?? "?";
+            }
+            return codes;
+        }
+
+        /// <summary>按语言代码查找 locale。</summary>
+        private static LocaleData FindLocale(List<LocaleData> locales, string code)
+        {
+            foreach (var l in locales)
+            {
+                if (l?.Meta?.Code == code) return l;
+            }
+            return null;
         }
     }
 }

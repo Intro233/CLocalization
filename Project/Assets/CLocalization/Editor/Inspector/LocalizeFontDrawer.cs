@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace CLocalization.Editor
 {
-    /// <summary>LocalizeFont 的 Inspector 增强：字体 key 下拉选择 + 校验。</summary>
+    /// <summary>LocalizeFont 的 Inspector 增强：字体 key 搜索选择 + 校验。</summary>
     [CustomEditor(typeof(LocalizeFont))]
     public class LocalizeFontDrawer : UnityEditor.Editor
     {

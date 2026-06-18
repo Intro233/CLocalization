@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace CLocalization.Editor
 {
-    /// <summary>LocalizeSprite 的 Inspector 增强：key 下拉选择 + 校验。</summary>
+    /// <summary>LocalizeSprite 的 Inspector 增强：key 搜索选择 + 校验 + 资源目录提示。</summary>
     [CustomEditor(typeof(LocalizeSprite))]
     public class LocalizeSpriteDrawer : UnityEditor.Editor
     {
