@@ -72,16 +72,29 @@ namespace CLocalization
                 string name = match.Groups["name"].Value;
                 if (namedArgs.TryGetValue(name, out var value) && value != null)
                 {
+                    string str;
                     // 数值类型用区域格式化，其它直接 ToString
                     if (value is System.IFormattable formattable)
                     {
-                        return formattable.ToString(null, useCulture);
+                        str = formattable.ToString(null, useCulture);
                     }
-                    return value.ToString();
+                    else
+                    {
+                        str = value.ToString();
+                    }
+                    // 转义值中的大括号，防止后续 string.Format 把值里的 {0}/{name} 当占位符误解析
+                    return EscapeBraces(str);
                 }
                 // 字典里没有该名称，保留原占位符（便于发现缺失参数）
                 return match.Value;
             });
+        }
+
+        /// <summary>把字符串中的 { 和 } 转义为 {{ 和 }}，使其在后续 string.Format 中作为字面量。</summary>
+        private static string EscapeBraces(string s)
+        {
+            if (string.IsNullOrEmpty(s) || (s.IndexOf('{') < 0 && s.IndexOf('}') < 0)) return s;
+            return s.Replace("{", "{{").Replace("}", "}}");
         }
 
         /// <summary>

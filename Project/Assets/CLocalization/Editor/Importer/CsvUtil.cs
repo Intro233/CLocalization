@@ -41,12 +41,18 @@ namespace CLocalization.Editor
         }
 
         /// <summary>从字符串解析 CSV 为二维表格。</summary>
+        /// <param name="separator">分隔符（一般用 ReadFile 的自动嗅探结果）。</param>
         public static List<List<string>> Read(string content, char separator = ',')
         {
             var rows = new List<List<string>>();
             var current = new List<string>();
             var field = new StringBuilder();
             bool inQuotes = false;
+            // 剥离开头可能残留的 UTF-8 BOM（防止首字段名带 \uFEFF 导致表头匹配失败）
+            if (content.Length > 0 && content[0] == '\uFEFF')
+            {
+                content = content.Substring(1);
+            }
             int i = 0;
             while (i < content.Length)
             {
@@ -120,12 +126,37 @@ namespace CLocalization.Editor
             return rows;
         }
 
-        /// <summary>从文件读取 CSV。</summary>
+        /// <summary>从文件读取 CSV。自动嗅探分隔符（逗号或分号），兼容不同区域设置的 Excel 导出。</summary>
         public static List<List<string>> ReadFile(string path, char separator = ',')
         {
             if (!File.Exists(path)) return new List<List<string>>();
             string content = File.ReadAllText(path);
-            return Read(content, separator);
+            // 嗅探：取第一行（表头），比较逗号与分号出现次数，选多的作为分隔符。
+            // 中文/德语等区域的 Excel 默认用分号分隔，写死逗号会导致整行被当成一个字段，数据导不进来。
+            char detected = DetectSeparator(content, separator);
+            return Read(content, detected);
+        }
+
+        /// <summary>
+        /// 嗅探 CSV 内容的分隔符：统计第一行（到首个换行）中逗号与分号的数量，取较多者。
+        /// 两者都为 0 或相同时回退到 fallback（默认逗号）。
+        /// </summary>
+        public static char DetectSeparator(string content, char fallback = ',')
+        {
+            if (string.IsNullOrEmpty(content)) return fallback;
+            // 取第一行（首个换行前的内容，忽略引号内分隔符的精度——表头一般不含引号）
+            int nl = content.IndexOfAny(new[] { '\r', '\n' });
+            string firstLine = nl > 0 ? content.Substring(0, nl) : content;
+
+            int comma = 0, semicolon = 0;
+            for (int i = 0; i < firstLine.Length; i++)
+            {
+                if (firstLine[i] == ',') comma++;
+                else if (firstLine[i] == ';') semicolon++;
+            }
+            if (semicolon > comma) return ';';
+            if (comma > 0) return ',';
+            return fallback;
         }
 
         /// <summary>字段转义：含逗号/引号/换行的字段需用引号包裹，内部引号翻倍。</summary>

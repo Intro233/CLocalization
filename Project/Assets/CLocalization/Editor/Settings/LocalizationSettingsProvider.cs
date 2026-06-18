@@ -19,6 +19,10 @@ namespace CLocalization.Editor
         /// <summary>_appliedMode 是否已初始化（首次访问时从 Settings 同步）。</summary>
         private bool _appliedModeInitialized;
 
+        /// <summary>已应用的 localesPath 基准（用于检测路径变化，触发文件迁移预览）。</summary>
+        private string _appliedLocalesPath;
+        private bool _appliedLocalesPathInitialized;
+
         public LocalizationSettingsProvider(string path, SettingsScope scope = SettingsScope.Project)
             : base(path, scope) { }
 
@@ -99,19 +103,37 @@ namespace CLocalization.Editor
             var localesPathProp = _serializedObject.FindProperty("localesPath");
             var assetsPathProp = _serializedObject.FindProperty("assetsPath");
 
-            // 首次访问时，用 Settings 当前落盘的模式初始化 _appliedMode（作为"已应用"基准）
+            // 首次访问时，用 Settings 当前落盘的值初始化已应用基准（模式 + 路径）
             if (!_appliedModeInitialized)
             {
                 _appliedMode = (AssetLoadMode)modeProp.enumValueIndex;
                 _appliedModeInitialized = true;
             }
+            if (!_appliedLocalesPathInitialized)
+            {
+                _appliedLocalesPath = localesPathProp.stringValue;
+                _appliedLocalesPathInitialized = true;
+            }
 
             EditorGUILayout.PropertyField(modeProp);
             EditorGUILayout.PropertyField(localesPathProp);
+
+            // localesPath 非法字符校验（拒绝绝对路径、盘符、非法字符，避免 Path.Combine 错乱/崩溃）
+            string localesPathRaw = localesPathProp.stringValue;
+            if (!IsPathSafe(localesPathRaw, out string pathError))
+            {
+                EditorGUILayout.HelpBox("⚠ 语言路径非法：" + pathError + "\n只允许字母、数字、下划线、横杠、正斜杠（相对路径），不能含盘符或绝对路径。", MessageType.Error);
+            }
+
             EditorGUILayout.PropertyField(assetsPathProp);
+            string assetsPathRaw = assetsPathProp.stringValue;
+            if (!IsPathSafe(assetsPathRaw, out string assetsError))
+            {
+                EditorGUILayout.HelpBox("⚠ 资源路径非法：" + assetsError, MessageType.Error);
+            }
 
             AssetLoadMode currentMode = (AssetLoadMode)modeProp.enumValueIndex;
-            string localesPath = localesPathProp.stringValue;
+            string localesPath = string.IsNullOrEmpty(localesPathRaw) ? "CLocalization/Locales" : localesPathRaw;
 
             // 显示当前下拉所选模式对应的实际磁盘目录
             string currentDir = LocalizationEditorData.GetLocalesDirectory(currentMode, localesPath);
@@ -128,6 +150,47 @@ namespace CLocalization.Editor
                     "• Android 平台必须用异步加载（SetLanguageAsync）\n" +
                     "• 该模式下 Project 窗口拖入 JSON 不会自动同步，需点下方「刷新语言列表」",
                     MessageType.Warning);
+            }
+
+            // localesPath 变化检测：路径改变时，把文件从旧路径迁到新路径（同模式下）
+            // _appliedLocalesPath 是已应用基准，localesPathRaw 是当前输入；不同时显示迁移预览
+            if (_appliedLocalesPathInitialized
+                && IsPathSafe(localesPathRaw, out _)
+                && localesPathRaw != _appliedLocalesPath
+                && !string.IsNullOrEmpty(_appliedLocalesPath))
+            {
+                EditorGUILayout.Space(6);
+                string fromDir = LocalizationEditorData.GetLocalesDirectory(currentMode, _appliedLocalesPath);
+                string toDir = LocalizationEditorData.GetLocalesDirectory(currentMode, localesPathRaw);
+                int fileCount = CountJsonFiles(fromDir);
+                EditorGUILayout.HelpBox(
+                    $"检测到语言路径变更：\n  {_appliedLocalesPath} → {localesPathRaw}\n" +
+                    $"{fromDir}\n  → {toDir}\n" +
+                    $"将迁移 {fileCount} 个语言文件。",
+                    fileCount > 0 ? MessageType.Info : MessageType.Warning);
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    if (GUILayout.Button("迁移文件并应用路径", GUILayout.Height(28)))
+                    {
+                        if (EditorUtility.DisplayDialog("迁移路径",
+                            $"确认把 {fileCount} 个语言文件从\n{_appliedLocalesPath}\n迁到\n{localesPathRaw}？",
+                            "迁移", "取消"))
+                        {
+                            MigrateBetweenPaths(fromDir, toDir);
+                            _appliedLocalesPath = localesPathRaw;
+                            _serializedObject.ApplyModifiedProperties();
+                            EditorUtility.SetDirty(_serializedObject.targetObject);
+                            AssetDatabase.SaveAssets();
+                            LocalizationEditorData.InvalidateDirectoryCache();
+                            LocalizationSetup.SyncSettingsFromLocales();
+                        }
+                    }
+                    if (GUILayout.Button("撤销路径修改", GUILayout.Width(110), GUILayout.Height(28)))
+                    {
+                        localesPathProp.stringValue = _appliedLocalesPath;
+                    }
+                }
             }
 
             // 模式变化检测：_appliedMode 是已应用基准，currentMode 是下拉当前值
@@ -149,12 +212,17 @@ namespace CLocalization.Editor
                     {
                         if (GUILayout.Button("迁移资源并应用", GUILayout.Height(30)))
                         {
+                            // 资源提示：切到 StreamingAssets 时，本地化资源（Sprite/Audio/Font）无法迁移且不再支持加载
+                            string assetNote = toMode == AssetLoadMode.StreamingAssets
+                                ? "\n\n⚠ 注意：本地化资源（Sprite/Audio/Font）不会迁移，且 StreamingAssets 模式不支持加载它们。\n" +
+                                  "如使用了 LocalizeSprite/AudioSource/Font 组件，请改回 Resources 模式，或保留资源在原 Resources 目录手动处理。"
+                                : "";
                             if (EditorUtility.DisplayDialog("迁移资源",
                                 $"确认迁移 {preview.FileCount} 个语言文件从 {fromMode} 到 {toMode}？\n\n" +
-                                $"源文件将被移动到新目录，旧目录的 JSON 会删除。\n（可通过版本控制回滚）",
+                                $"源文件将被移动到新目录，旧目录的 JSON 会删除。\n（可通过版本控制回滚）{assetNote}",
                                 "迁移", "取消"))
                             {
-                                LocalizationAssetMigrator.Migrate(fromMode, toMode, localesPath);
+                                int migrated = LocalizationAssetMigrator.Migrate(fromMode, toMode, localesPath);
                                 _serializedObject.ApplyModifiedProperties();
                                 EditorUtility.SetDirty(_serializedObject.targetObject);
                                 AssetDatabase.SaveAssets();
@@ -162,6 +230,11 @@ namespace CLocalization.Editor
                                 // 迁移成功后，更新已应用基准为新模式
                                 _appliedMode = toMode;
                                 LocalizationSetup.SyncSettingsFromLocales();
+                                // 结果提示（含资源处理说明）
+                                string resultAssetNote = toMode == AssetLoadMode.StreamingAssets
+                                    ? $"\n\n⚠ 已迁移 {migrated} 个语言文件。本地化资源（Sprite/Audio/Font）未迁移，StreamingAssets 模式下不再支持加载，请手动处理。"
+                                    : $"\n\n已迁移 {migrated} 个语言文件。";
+                                EditorUtility.DisplayDialog("迁移完成", "迁移完成。" + resultAssetNote, "确定");
                             }
                         }
                         if (GUILayout.Button("撤销切换", GUILayout.Width(90), GUILayout.Height(30)))
@@ -201,6 +274,90 @@ namespace CLocalization.Editor
                 LocalizationEditorData.InvalidateDirectoryCache();
                 LocalizationSetup.SyncSettingsFromLocales();
             }
+        }
+
+        /// <summary>
+        /// 校验相对路径安全性：禁止绝对路径、盘符、非法字符。
+        /// 只允许字母/数字/下划线/横杠/正斜杠组成的相对路径。
+        /// </summary>
+        private static bool IsPathSafe(string path, out string error)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                error = "路径为空。";
+                return false;
+            }
+            // 绝对路径/盘符（Windows 盘符 D: 或 Unix 绝对路径 /）
+            if (System.IO.Path.IsPathRooted(path))
+            {
+                error = "不能使用绝对路径，必须是相对路径（如 CLocalization/Locales）。";
+                return false;
+            }
+            if (path.Contains(":") || path.Contains("\\"))
+            {
+                error = "不能含盘符(:)或反斜杠(\\)，请用正斜杠 /。";
+                return false;
+            }
+            // GetInvalidPathChars 校验
+            char[] invalid = System.IO.Path.GetInvalidPathChars();
+            foreach (char c in path)
+            {
+                foreach (char ic in invalid)
+                {
+                    if (c == ic)
+                    {
+                        error = $"含非法字符 '{c}'。";
+                        return false;
+                    }
+                }
+            }
+            error = null;
+            return true;
+        }
+
+        /// <summary>统计目录下 .json 文件数（精确后缀，排除 .json5 等）。</summary>
+        private static int CountJsonFiles(string dir)
+        {
+            if (string.IsNullOrEmpty(dir) || !System.IO.Directory.Exists(dir)) return 0;
+            int count = 0;
+            foreach (var f in System.IO.Directory.GetFiles(dir, "*"))
+            {
+                if (f.EndsWith(LocalizationPaths.LocaleExtension, System.StringComparison.OrdinalIgnoreCase))
+                    count++;
+            }
+            return count;
+        }
+
+        /// <summary>在同模式下的两个路径间迁移语言文件（复制+删源+删 .meta+刷新）。</summary>
+        private static void MigrateBetweenPaths(string fromDir, string toDir)
+        {
+            if (!System.IO.Directory.Exists(fromDir)) return;
+            System.IO.Directory.CreateDirectory(toDir);
+            int n = 0;
+            foreach (var f in System.IO.Directory.GetFiles(fromDir, "*"))
+            {
+                if (!f.EndsWith(LocalizationPaths.LocaleExtension, System.StringComparison.OrdinalIgnoreCase)) continue;
+                string name = System.IO.Path.GetFileName(f);
+                System.IO.File.Copy(f, System.IO.Path.Combine(toDir, name), overwrite: true);
+                System.IO.File.Delete(f);
+                string meta = f + ".meta";
+                if (System.IO.File.Exists(meta)) System.IO.File.Delete(meta);
+                n++;
+            }
+            // 尝试删除空源目录
+            try
+            {
+                if (System.IO.Directory.Exists(fromDir) && System.IO.Directory.GetFileSystemEntries(fromDir).Length == 0)
+                {
+                    System.IO.Directory.Delete(fromDir);
+                    string dmeta = fromDir + ".meta";
+                    if (System.IO.File.Exists(dmeta)) System.IO.File.Delete(dmeta);
+                }
+            }
+            catch (System.Exception ex) { LocalizationLog.Warning($"删除空目录失败（可忽略）: {fromDir}  {ex.Message}"); }
+
+            AssetDatabase.Refresh();
+            LocalizationLog.Info($"路径迁移完成：{n} 个文件  {fromDir} → {toDir}");
         }
     }
 }

@@ -107,11 +107,14 @@ namespace CLocalization.Editor
 
     /// <summary>
     /// Key 列表的 TreeView 实现。虚拟滚动，支持搜索过滤、键盘导航、双击选中。
+    /// 搜索性能优化：构造时预计算每个 key 的小写形式，搜索时用 IndexOf(OrdinalIgnoreCase) 免分配匹配。
     /// </summary>
     public class KeyTreeView : TreeView
     {
         /// <summary>所有 key 列表（过滤前）。</summary>
         private readonly List<string> _allKeys;
+        /// <summary>预计算的小写 key（与 _allKeys 一一对应，避免每次搜索重复 ToLowerInvariant 分配）。</summary>
+        private readonly List<string> _lowerKeys;
         /// <summary>过滤后的可见 key。</summary>
         private readonly List<string> _filtered = new List<string>();
         /// <summary>选中回调。</summary>
@@ -120,6 +123,13 @@ namespace CLocalization.Editor
         public KeyTreeView(string[] allKeys, string currentKey) : base(new TreeViewState())
         {
             _allKeys = new List<string>(allKeys);
+            // 预计算小写形式（仅一次，O(n)，避免每次按键都全量 ToLowerInvariant）
+            _lowerKeys = new List<string>(_allKeys.Count);
+            for (int i = 0; i < _allKeys.Count; i++)
+            {
+                _lowerKeys.Add(_allKeys[i] != null ? _allKeys[i].ToLowerInvariant() : "");
+            }
+
             showAlternatingRowBackgrounds = true;
             // 定位到当前 key
             if (!string.IsNullOrEmpty(currentKey))
@@ -137,18 +147,25 @@ namespace CLocalization.Editor
 
             string search = searchString;
             bool hasSearch = !string.IsNullOrEmpty(search);
-            string needle = hasSearch ? search.ToLowerInvariant() : null;
 
-            // 父子分组：按 key 的第一段（点号前）分组，便于浏览
-            // 这里采用扁平列表 + 可选分组。为简单与快速，先做扁平列表（key 多时分组反而干扰搜索）
+            // 扁平列表：搜索时用 OrdinalIgnoreCase 免分配匹配（不重复 ToLowerInvariant）
             int id = 1;
-            foreach (var key in _allKeys)
+            for (int i = 0; i < _allKeys.Count; i++)
             {
-                bool visible = !hasSearch || key.ToLowerInvariant().Contains(needle);
+                bool visible;
+                if (!hasSearch)
+                {
+                    visible = true;
+                }
+                else
+                {
+                    // 用预计算的小写 key 做 IndexOf，零字符串分配
+                    visible = _lowerKeys[i].IndexOf(search, System.StringComparison.OrdinalIgnoreCase) >= 0;
+                }
                 if (visible)
                 {
-                    _filtered.Add(key);
-                    root.AddChild(new TreeViewItem { id = id, depth = 0, displayName = key });
+                    _filtered.Add(_allKeys[i]);
+                    root.AddChild(new TreeViewItem { id = id, depth = 0, displayName = _allKeys[i] });
                     id++;
                 }
             }

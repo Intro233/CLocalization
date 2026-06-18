@@ -29,7 +29,7 @@ MonoBehaviour:
     displayName: "\uD55C\uAD6D\uC5B4"
     flag: {fileID: 0}
     isRightToLeft: 0
-  defaultLanguageCode: en-US
+  defaultLanguageCode: zh-CN
   persistLanguageChoice: 1
   useSystemLanguageByDefault: 1
   fallbackToDefaultLanguage: 1

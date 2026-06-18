@@ -1,3 +1,4 @@
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace CLocalization
@@ -22,6 +23,14 @@ namespace CLocalization
         [Tooltip("是否在 Awake 即初始化（推荐）")]
         [SerializeField] private bool initializeOnAwake = true;
 
+        /// <summary>
+        /// 是否用异步初始化（Localization.InitializeAsync）。
+        /// StreamingAssets 模式（尤其 Android）必须开启，因为同步加载不可用。
+        /// Resources 模式可不开启（同步更快）。
+        /// </summary>
+        [Tooltip("是否异步初始化。StreamingAssets 模式（尤其 Android）必须开启")]
+        [SerializeField] private bool useAsyncInitialization;
+
         /// <summary>Settings 访问器，便于外部读取。</summary>
         public LocalizationSettings Settings => settings;
 
@@ -29,12 +38,19 @@ namespace CLocalization
         {
             if (initializeOnAwake)
             {
-                Initialize();
+                if (useAsyncInitialization)
+                {
+                    InitializeAsync().Forget();
+                }
+                else
+                {
+                    Initialize();
+                }
             }
         }
 
         /// <summary>
-        /// 手动触发初始化（当 initializeOnAwake=false 或外部接管时调用）。
+        /// 手动触发【同步】初始化（当 initializeOnAwake=false 或外部接管时调用）。
         /// </summary>
         public void Initialize()
         {
@@ -55,6 +71,29 @@ namespace CLocalization
             {
                 Localization.Initialize(s);
             }
+        }
+
+        /// <summary>
+        /// 手动触发【异步】初始化（StreamingAssets 模式 / Android 必须用此方式）。
+        /// 加载在后台进行，完成后系统就绪。
+        /// </summary>
+        public async UniTask<bool> InitializeAsync()
+        {
+            LocalizationSettings s = settings;
+            if (s == null)
+            {
+                s = Resources.Load<LocalizationSettings>(LocalizationPaths.Root + "/LocalizationSettings");
+            }
+            if (s == null)
+            {
+                LocalizationLog.Error("LocalizationInitializer 找不到 LocalizationSettings，请指定或放入 Resources/CLocalization/。");
+                return false;
+            }
+            if (!Localization.IsInitialized)
+            {
+                return await Localization.InitializeAsync(s);
+            }
+            return true;
         }
     }
 }

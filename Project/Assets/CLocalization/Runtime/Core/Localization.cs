@@ -36,6 +36,9 @@ namespace CLocalization
         /// <summary>当前语言信息缓存（ApplyLanguage 成功时赋值，避免 CurrentLanguage 每次 O(n) 查找）。</summary>
         private static LanguageInfo _currentLanguageInfo;
 
+        /// <summary>语言切换请求序号（单调递增）。用于异步切换时取消过期请求，避免竞态。</summary>
+        private static long _applyEpoch;
+
         // ---------- 事件 ----------
 
         /// <summary>语言切换事件。Localize 组件订阅此事件以自动刷新显示。</summary>
@@ -116,27 +119,20 @@ namespace CLocalization
                 return;
             }
 
+            // 重置所有静态状态，避免再次 Initialize（换 Loader/Settings）时旧 _defaultLocale 等残留
+            ResetState();
             _settings = settings;
             _loader = loader;
             LocalizationLog.LogWarnings = settings.LogMissingKeys;
 
             // 收集可用语言代码（以 Settings 配置为准）
-            var codes = new List<string>();
-            for (int i = 0; i < settings.Languages.Count; i++)
-            {
-                if (settings.Languages[i] != null && settings.Languages[i].IsValid)
-                {
-                    codes.Add(settings.Languages[i].Code);
-                }
-            }
+            var codes = CollectAvailableCodes(settings);
 
-            // 解析初始语言并加载。初始化后触发一次事件，
-            // 让所有「先于初始化激活」的组件能刷新（后激活的组件会在 OnEnable 时自行刷新）。
+            // 解析初始语言并加载。
             string initialCode = LocalizationPrefs.ResolveInitialLanguage(settings, codes);
             ApplyLanguage(initialCode, persist: false, fireEvent: true);
 
-            // 初始化兜底：若初始语言加载失败（ApplyLanguage 内部已 return，_currentCode 仍为 null），
-            // 则尝试回退到默认语言；再失败则尝试可用列表中第一个能加载成功的语言。
+            // 初始化兜底：若初始语言加载失败，回退到默认语言；再失败则遍历可用列表。
             if (string.IsNullOrEmpty(_currentCode))
             {
                 LocalizationLog.Warning($"初始语言 \"{initialCode}\" 加载失败，尝试回退到默认语言。");
@@ -151,9 +147,93 @@ namespace CLocalization
                 }
             }
 
+            LogInitResult();
+        }
+
+        /// <summary>
+        /// 【异步】使用指定配置初始化（根据 AssetLoadMode 自动选 Loader）。
+        /// 适用于 Android + StreamingAssets 等同步加载不可用的场景。
+        /// </summary>
+        public static async UniTask<bool> InitializeAsync(LocalizationSettings settings)
+        {
+            if (settings == null)
+            {
+                LocalizationLog.Error("初始化失败：LocalizationSettings 为空。");
+                return false;
+            }
+            return await InitializeAsync(settings, CreateDefaultLoader(settings));
+        }
+
+        /// <summary>
+        /// 【异步】使用指定配置与自定义加载器初始化。
+        /// 异步加载初始语言与默认回退语言，全程主线程应用状态。
+        /// </summary>
+        public static async UniTask<bool> InitializeAsync(LocalizationSettings settings, ILocalizationLoader loader)
+        {
+            if (settings == null || loader == null)
+            {
+                LocalizationLog.Error("异步初始化失败：settings 或 loader 为空。");
+                return false;
+            }
+
+            ResetState();
+            _settings = settings;
+            _loader = loader;
+            LocalizationLog.LogWarnings = settings.LogMissingKeys;
+
+            var codes = CollectAvailableCodes(settings);
+            string initialCode = LocalizationPrefs.ResolveInitialLanguage(settings, codes);
+
+            // 异步应用初始语言（含异步预加载默认语言）
+            bool ok = await ApplyLanguageAsync(initialCode, persist: false, fireEvent: true);
+            if (!ok)
+            {
+                LocalizationLog.Warning($"初始语言 \"{initialCode}\" 异步加载失败，尝试默认语言。");
+                ok = await ApplyLanguageAsync(settings.DefaultLanguageCode, persist: false, fireEvent: true);
+            }
+            if (!ok)
+            {
+                foreach (var c in codes)
+                {
+                    if (await ApplyLanguageAsync(c, persist: false, fireEvent: true)) break;
+                }
+            }
+
+            LogInitResult();
+            return !string.IsNullOrEmpty(_currentCode);
+        }
+
+        /// <summary>重置所有运行时静态状态（再次 Initialize 前调用，避免旧数据残留）。</summary>
+        private static void ResetState()
+        {
+            _currentCode = null;
+            _currentLocale = null;
+            _defaultLocale = null;
+            _currentCulture = null;
+            _currentLanguageInfo = null;
+            _applyEpoch = 0;
+        }
+
+        /// <summary>从 Settings 收集可用语言代码列表。</summary>
+        private static List<string> CollectAvailableCodes(LocalizationSettings settings)
+        {
+            var codes = new List<string>();
+            for (int i = 0; i < settings.Languages.Count; i++)
+            {
+                if (settings.Languages[i] != null && settings.Languages[i].IsValid)
+                {
+                    codes.Add(settings.Languages[i].Code);
+                }
+            }
+            return codes;
+        }
+
+        /// <summary>输出初始化结果日志。</summary>
+        private static void LogInitResult()
+        {
             if (string.IsNullOrEmpty(_currentCode))
             {
-                LocalizationLog.Error("所有语言数据加载失败，本地化系统处于降级状态（查询将返回 key 本身）。请检查 Resources/CLocalization/Locales 目录及 Settings 配置。");
+                LocalizationLog.Error("所有语言数据加载失败，本地化系统处于降级状态（查询将返回 key 本身）。请检查语言目录及 Settings 配置。");
             }
             else
             {
@@ -315,6 +395,8 @@ namespace CLocalization
             }
             if (languageCode == _currentCode) return;
 
+            // 递增请求序号，使进行中的异步切换请求失效（避免异步续体回来覆盖本次同步切换）
+            System.Threading.Interlocked.Increment(ref _applyEpoch);
             ApplyLanguage(languageCode, persist: _settings.PersistLanguageChoice, fireEvent: true);
         }
 
@@ -348,7 +430,13 @@ namespace CLocalization
                 LocalizationLog.Warning($"语言 \"{languageCode}\" 不在可用列表中，已忽略。");
                 return false;
             }
-            if (languageCode == _currentCode) return true;
+            if (languageCode == _currentCode)
+            {
+                // 即使目标等于当前语言，也递增 epoch 取消进行中的异步切换请求，
+                // 防止旧的异步续体回来覆盖（用户显式选择了"保持当前"语义）
+                System.Threading.Interlocked.Increment(ref _applyEpoch);
+                return true;
+            }
 
             return await ApplyLanguageAsync(languageCode, persist: _settings.PersistLanguageChoice, fireEvent: true);
         }
@@ -387,17 +475,46 @@ namespace CLocalization
                 LocalizationLog.Warning($"语言 \"{code}\" 数据加载失败，已保持当前语言 \"{_currentCode}\"。");
                 return;
             }
+            // 同步预加载默认语言（带异常保护：Android+SA 同步 LoadLocale 会抛 NotSupportedException，此处降级不崩）
+            PreloadDefaultLocaleSync(code);
             ApplyLoadedLocale(code, locale, persist, fireEvent);
+        }
+
+        /// <summary>
+        /// 【同步】预加载默认语言（用于回退）。同步 ApplyLanguage 路径使用。
+        /// 用 try-catch 容错：不支持同步加载的 Loader（Android+SA）会抛 NotSupportedException，此时降级不预加载。
+        /// </summary>
+        private static void PreloadDefaultLocaleSync(string currentCode)
+        {
+            if (_defaultLocale != null || !_settings.FallbackToDefaultLanguage) return;
+            string defaultCode = _settings.DefaultLanguageCode;
+            if (string.IsNullOrEmpty(defaultCode) || defaultCode == currentCode) return;
+            try
+            {
+                _defaultLocale = _loader.LoadLocale(defaultCode);
+            }
+            catch (System.NotSupportedException)
+            {
+                // Android+SA 等不支持同步加载，跳过预加载（回退语言暂不可用，不崩溃）
+                LocalizationLog.Warning($"同步预加载默认语言 \"{defaultCode}\" 不受支持，回退语言暂不可用。建议用 InitializeAsync / SetLanguageAsync。");
+            }
+            catch (Exception ex)
+            {
+                LocalizationLog.Warning($"预加载默认语言 \"{defaultCode}\" 失败: {ex.Message}");
+            }
         }
 
         /// <summary>
         /// 【异步】应用某语言：异步加载 locale（后台），切回主线程应用状态。
         /// 状态写入与事件触发保证在主线程执行（线程安全）。
         /// </summary>
-        /// <returns>是否切换成功（加载失败返回 false）。</returns>
+        /// <returns>是否切换成功（加载失败或被后续请求取消返回 false）。</returns>
         private static async UniTask<bool> ApplyLanguageAsync(string code, bool persist, bool fireEvent)
         {
-            // 1) 异步加载语言数据（可能在后台线程，如 Addressables）
+            // 分配本次请求的序号；任何更新的请求会让本序号过期
+            long myEpoch = System.Threading.Interlocked.Increment(ref _applyEpoch);
+
+            // 1) 异步加载语言数据（可能在后台线程，如 Addressables / StreamingAssets 文件读取）
             LocaleData locale;
             try
             {
@@ -412,18 +529,62 @@ namespace CLocalization
             // 2) 切回主线程后再应用状态（保证 _currentLocale 等可变字段的主线程安全）
             await UniTask.SwitchToMainThread();
 
+            // 竞态取消：若期间有更新的切换请求发起，丢弃本次结果（最后发起者胜）
+            if (myEpoch != _applyEpoch)
+            {
+                LocalizationLog.Info($"语言 \"{code}\" 的异步加载已完成，但被更新的切换请求取代，丢弃。");
+                return false;
+            }
+
             if (locale == null)
             {
                 LocalizationLog.Warning($"语言 \"{code}\" 数据加载失败，已保持当前语言 \"{_currentCode}\"。");
                 return false;
             }
+
+            // 3) 异步预加载默认语言（Android+SA 同步 LoadLocale 会抛异常，必须异步）
+            await PreloadDefaultLocaleAsync(code, myEpoch);
+            // 预加载期间若有新请求，同样取消
+            if (myEpoch != _applyEpoch) return false;
+
             ApplyLoadedLocale(code, locale, persist, fireEvent);
             return true;
         }
 
         /// <summary>
-        /// 把已加载的 locale 应用到当前状态（更新 code/locale/culture/languageInfo，预加载默认语言，持久化，触发事件）。
+        /// 异步预加载默认语言（用于回退）。Android+SA 同步 LoadLocale 不可用，故异步加载。
+        /// 仅在首次需要时（_defaultLocale == null）执行。
+        /// </summary>
+        private static async UniTask PreloadDefaultLocaleAsync(string currentCode, long myEpoch)
+        {
+            if (_defaultLocale != null || !_settings.FallbackToDefaultLanguage) return;
+            string defaultCode = _settings.DefaultLanguageCode;
+            if (string.IsNullOrEmpty(defaultCode)) return;
+            if (defaultCode == currentCode)
+            {
+                // 当前语言即默认语言，加载时一并缓存
+                return;
+            }
+            try
+            {
+                LocaleData def = await _loader.LoadLocaleAsync(defaultCode);
+                // 仅当仍是本次请求时才写入，避免被并发请求污染
+                if (myEpoch == _applyEpoch)
+                {
+                    _defaultLocale = def;
+                }
+            }
+            catch (Exception ex)
+            {
+                LocalizationLog.Warning($"异步预加载默认语言 \"{defaultCode}\" 失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 把已加载的 locale 应用到当前状态（更新 code/locale/culture/languageInfo，持久化，触发事件）。
         /// 同步/异步路径共用。必须在主线程调用。
+        /// 注意：默认语言的预加载由调用方负责（同步 ApplyLanguage 用 PreloadDefaultLocaleSync，异步用 PreloadDefaultLocaleAsync），
+        /// 此处仅处理「当前语言即默认语言」的快捷赋值。
         /// </summary>
         private static void ApplyLoadedLocale(string code, LocaleData locale, bool persist, bool fireEvent)
         {
@@ -433,15 +594,11 @@ namespace CLocalization
             // 缓存当前语言信息，供 CurrentLanguage O(1) 访问
             _currentLanguageInfo = _settings.FindLanguage(code);
 
-            // 预加载默认语言数据（首次切换时用于回退）
+            // 若当前语言即默认语言，直接缓存引用（其他情况的预加载由调用方处理）
             if (_defaultLocale == null && _settings.FallbackToDefaultLanguage)
             {
                 string defaultCode = _settings.DefaultLanguageCode;
-                if (!string.IsNullOrEmpty(defaultCode) && defaultCode != code)
-                {
-                    _defaultLocale = _loader.LoadLocale(defaultCode);
-                }
-                else if (defaultCode == code)
+                if (!string.IsNullOrEmpty(defaultCode) && defaultCode == code)
                 {
                     _defaultLocale = _currentLocale;
                 }

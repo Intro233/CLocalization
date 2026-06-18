@@ -480,7 +480,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   refreshOnEnable: 1
-  localizationKey: common.ok
+  localizationKey: demo.subtitle
   tmpText: {fileID: 0}
   uiText: {fileID: 0}
   formatArgs: []

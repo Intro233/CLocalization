@@ -5,8 +5,8 @@
     "version": "1.0.0"
   },
   "entries": {
-    "common.ok": "确定",
-    "common.cancel": "取消",
+    "common.ok": "确实",
+    "common.cancel": "取消更新",
     "common.confirm": "确认",
     "common.back": "返回",
     "common.start": "开始",

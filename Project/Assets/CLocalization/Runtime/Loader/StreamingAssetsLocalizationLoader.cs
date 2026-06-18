@@ -166,6 +166,8 @@ namespace CLocalization
                 LocalizationLog.Error($"读取语言文件失败: {filePath}  错误: {ex.Message}");
                 return null;
             }
+            // 切回主线程再解析与写缓存（_localeCache 是非线程安全的 Dictionary，必须主线程访问）
+            await UniTask.SwitchToMainThread();
             return ParseAndCache(languageCode, text, filePath);
         }
 

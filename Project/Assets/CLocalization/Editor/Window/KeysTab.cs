@@ -29,10 +29,26 @@ namespace CLocalization.Editor
         /// <summary>是否降序。</summary>
         private bool _sortDescending;
 
-        // ---------- 列宽（可拖拽） ----------
+        // ---------- 列宽（可拖拽，每列独立） ----------
+        /// <summary>key 列宽。</summary>
         private float _keyColumnWidth = 180f;
-        private float _langColumnWidth = 200f;
+        /// <summary>各语言列宽（按语言代码独立存储，拖某一列只影响该列）。</summary>
+        private readonly Dictionary<string, float> _langColumnWidths = new Dictionary<string, float>();
+        /// <summary>语言列默认宽度。</summary>
+        private const float DefaultLangColumnWidth = 200f;
         private const float MinColumnWidth = 80f;
+
+        /// <summary>获取指定语言列的宽度（无记录则用默认值）。</summary>
+        private float GetLangColumnWidth(string code)
+        {
+            return _langColumnWidths.TryGetValue(code, out var w) ? w : DefaultLangColumnWidth;
+        }
+
+        /// <summary>设置指定语言列的宽度。</summary>
+        private void SetLangColumnWidth(string code, float width)
+        {
+            _langColumnWidths[code] = Mathf.Max(MinColumnWidth, width);
+        }
 
         // ---------- key 列表与分页 ----------
         /// <summary>排序后的 key 列表（缓存）。</summary>
@@ -48,6 +64,18 @@ namespace CLocalization.Editor
         /// <summary>当前窗口引用。</summary>
         private LocalizationWindow _window;
 
+        // ---------- 过滤排序结果缓存（避免每帧全量重算） ----------
+        /// <summary>缓存的过滤+排序结果。</summary>
+        private List<string> _visibleKeysCache = new List<string>();
+        /// <summary>缓存是否需要重算（脏标记）。</summary>
+        private bool _cacheDirty = true;
+        /// <summary>生成缓存时的参数快照，用于检测参数变化。</summary>
+        private string _cachedSearch;
+        private bool _cachedOnlyMissing;
+        private string _cachedSortColumn;
+        private bool _cachedSortDescending;
+        private int _cachedKeyCount = -1;
+
         // ---------- 行选中（供诊断跳转定位） ----------
         /// <summary>当前选中的 key（高亮 + 滚动定位）。</summary>
         private string _selectedKey;
@@ -56,7 +84,7 @@ namespace CLocalization.Editor
         public void OnDataChanged(List<LocaleData> locales)
         {
             _keys = LocalizationEditorData.CollectAllKeys(locales);
-            ApplySort(locales);
+            _cacheDirty = true; // 标记过滤排序缓存失效，下次 GetVisibleKeys 重算
         }
 
         /// <summary>绘制 Tab 内容。</summary>
@@ -131,7 +159,21 @@ namespace CLocalization.Editor
         {
             if (locales == null || locales.Count == 0) return;
             List<string> visible = GetFilteredKeys(locales);
-            LocaleData defaultLocale = locales.Count > 0 ? locales[0] : null; // 默认语言约定为第一个
+            // 默认语言取 settings.DefaultLanguageCode 对应的 locale（非列表第一个，顺序不可靠）
+            string defaultCode = LocalizationSetup.LoadOrCreateSettings()?.DefaultLanguageCode;
+            LocaleData defaultLocale = null;
+            if (!string.IsNullOrEmpty(defaultCode))
+            {
+                foreach (var l in locales)
+                {
+                    if (l?.Meta?.Code == defaultCode) { defaultLocale = l; break; }
+                }
+            }
+            if (defaultLocale == null)
+            {
+                LocalizationLog.Warning("未找到默认语言，无法填充。请在 Settings 中设置 DefaultLanguageCode。");
+                return;
+            }
 
             int filled = 0;
             foreach (var key in visible)
@@ -141,7 +183,7 @@ namespace CLocalization.Editor
                     if (locale == defaultLocale) continue;
                     if (locale.Entries == null) continue;
                     bool has = locale.Entries.TryGetValue(key, out var v) && !string.IsNullOrEmpty(v);
-                    if (!has && defaultLocale?.Entries != null
+                    if (!has && defaultLocale.Entries != null
                         && defaultLocale.Entries.TryGetValue(key, out var dv) && !string.IsNullOrEmpty(dv))
                     {
                         locale.Entries[key] = dv;
@@ -192,9 +234,8 @@ namespace CLocalization.Editor
                 return;
             }
 
-            List<string> visibleKeys = GetFilteredKeys(locales);
-            // 切换过滤后可能需要重排（仅看未翻译改变后排序键变化）
-            ApplySort(locales, visibleKeys);
+            // 按需重算过滤+排序结果（仅在搜索/过滤/排序/数据变化时），避免每帧全量重算卡顿
+            List<string> visibleKeys = GetVisibleKeys(locales);
 
             // 定位到选中 key（供诊断跳转：滚动到包含选中 key 的页）
             EnsureSelectionVisible(visibleKeys);
@@ -234,7 +275,7 @@ namespace CLocalization.Editor
                 foreach (var locale in locales)
                 {
                     string code = locale.Meta?.Code ?? "?";
-                    DrawSortableHeader(code, code, _langColumnWidth, isKeyColumn: false);
+                    DrawSortableHeader(code, code, GetLangColumnWidth(code), isKeyColumn: false);
                 }
                 GUILayout.Label("操作", EditorStyles.boldLabel, GUILayout.Width(50));
             }
@@ -271,12 +312,13 @@ namespace CLocalization.Editor
             }
 
             // 列宽拖拽：在表头右边缘画一个可拖拽分隔条
-            DrawColumnResizer(headerRect, isKeyColumn);
+            DrawColumnResizer(headerRect, isKeyColumn, languageCode);
         }
 
         /// <summary>在表头右边缘绘制可拖拽的列宽调整条。</summary>
-        /// <param name="isKeyColumn">是否调整 key 列宽（否则调整语言列宽）。</param>
-        private void DrawColumnResizer(Rect headerRect, bool isKeyColumn)
+        /// <param name="isKeyColumn">是否调整 key 列宽（否则调整 languageCode 对应的语言列宽）。</param>
+        /// <param name="languageCode">语言列的代码（isKeyColumn=false 时用）。</param>
+        private void DrawColumnResizer(Rect headerRect, bool isKeyColumn, string languageCode)
         {
             float handleWidth = 6f;
             Rect resizeRect = new Rect(headerRect.xMax - handleWidth / 2f, headerRect.yMin, handleWidth, headerRect.height);
@@ -298,7 +340,8 @@ namespace CLocalization.Editor
                 }
                 else
                 {
-                    _langColumnWidth = Mathf.Max(MinColumnWidth, _langColumnWidth + delta);
+                    // 按语言代码独立调整该列宽（拖一列只影响该列）
+                    SetLangColumnWidth(languageCode, GetLangColumnWidth(languageCode) + delta);
                 }
                 e.Use();
             }
@@ -318,7 +361,7 @@ namespace CLocalization.Editor
             if (isSelected) GUI.backgroundColor = new Color(0.4f, 0.6f, 0.95f, 1f);
             else if (alternate) GUI.backgroundColor = new Color(0.85f, 0.85f, 0.85f, 1f);
 
-            using (new EditorGUILayout.HorizontalScope(GUI.skin.box))
+            using (var rowScope = new EditorGUILayout.HorizontalScope(GUI.skin.box))
             {
                 // key + 复制按钮
                 using (new EditorGUILayout.HorizontalScope(GUILayout.Width(_keyColumnWidth)))
@@ -345,14 +388,16 @@ namespace CLocalization.Editor
                         GUI.changed = true;
                     }
                 }
+
+                // 在 HorizontalScope 内用其 rect 判定点击选中（避免 GetLastRect 在 scope 外语义模糊）
+                // 子控件（按钮/输入框）会先消费各自的点击事件，只有点击空白区域才会到这里
+                if (Event.current.type == EventType.MouseDown && rowScope.rect.Contains(Event.current.mousePosition))
+                {
+                    _selectedKey = key;
+                    Event.current.Use();
+                }
             }
             GUI.backgroundColor = oldBg;
-
-            // 点击行选中
-            if (Event.current.type == EventType.MouseDown && GUILayoutUtility.GetLastRect().Contains(Event.current.mousePosition))
-            {
-                _selectedKey = key;
-            }
         }
 
         /// <summary>绘制单个语言单元格：空值高亮，多行可编辑。</summary>
@@ -365,14 +410,16 @@ namespace CLocalization.Editor
             if (string.IsNullOrEmpty(current)) GUI.backgroundColor = new Color(1f, 0.95f, 0.6f);
 
             // 多行文本编辑：检测是否含换行符，含则用 TextArea，否则用 TextField（节省垂直空间）
+            // 列宽按该语言独立取（拖拽时只影响对应列）
+            float colWidth = GetLangColumnWidth(locale.Meta?.Code ?? "?");
             string newVal;
             if (current.Contains("\n") || current.Length > 60)
             {
-                newVal = EditorGUILayout.TextArea(current, GUILayout.Width(_langColumnWidth), GUILayout.MinHeight(40));
+                newVal = EditorGUILayout.TextArea(current, GUILayout.Width(colWidth), GUILayout.MinHeight(40));
             }
             else
             {
-                newVal = EditorGUILayout.TextField(current, GUILayout.Width(_langColumnWidth));
+                newVal = EditorGUILayout.TextField(current, GUILayout.Width(colWidth));
             }
             GUI.backgroundColor = oldBg;
 
@@ -401,6 +448,37 @@ namespace CLocalization.Editor
         }
 
         // ---------- 过滤与排序 ----------
+
+        /// <summary>
+        /// 获取过滤+排序后的可见 key 列表（带缓存）。
+        /// 仅当搜索/过滤开关/排序列/排序方向/底层数据数量变化时才重算，避免每帧全量遍历。
+        /// </summary>
+        private List<string> GetVisibleKeys(List<LocaleData> locales)
+        {
+            // 检测参数是否变化（任一变化则标记脏，需重算）
+            bool changed = _cacheDirty
+                || _cachedSearch != _search
+                || _cachedOnlyMissing != _onlyMissing
+                || _cachedSortColumn != _sortColumn
+                || _cachedSortDescending != _sortDescending
+                || _cachedKeyCount != _keys.Count;
+
+            if (!changed) return _visibleKeysCache;
+
+            // 重算
+            _visibleKeysCache = GetFilteredKeys(locales);
+            ApplySort(locales, _visibleKeysCache);
+
+            // 更新快照
+            _cachedSearch = _search;
+            _cachedOnlyMissing = _onlyMissing;
+            _cachedSortColumn = _sortColumn;
+            _cachedSortDescending = _sortDescending;
+            _cachedKeyCount = _keys.Count;
+            _cacheDirty = false;
+            _page = 0; // 过滤条件变化回到第一页
+            return _visibleKeysCache;
+        }
 
         /// <summary>按搜索 + 仅看未翻译过滤 key。</summary>
         private List<string> GetFilteredKeys(List<LocaleData> locales)
@@ -518,7 +596,7 @@ namespace CLocalization.Editor
                 locale.Entries[key] = "";
             }
             _keys.Add(key);
-            ApplySort(locales);
+            _cacheDirty = true; // 新增 key 后缓存失效，下次重算
             _window?.MarkDirty();
             LocalizationLog.Info($"已新增 key \"{key}\"（已在所有语言中创建空翻译，请填写）。");
         }

@@ -6,6 +6,46 @@
 
 ---
 
+## [2.2.2] - 2026-06-18
+
+紧急修复：Excel 导出的 CSV 导入不进来。
+
+### 修复
+- **【根因】导入后调 Reload 把内存数据覆盖**：`ImportCsv` 在 `ImportFromCsv` 写入内存后调了 `window.Reload()`，而 Reload 从磁盘重新加载，**覆盖了刚导入的修改**，导致用户看到数据"没导进来"。改为调 `RefreshCaches`（只刷新 Tab 缓存、不读盘）+ `MarkDirty`（提示保存）。
+- **CSV 分隔符写死逗号导致中文/德语等区域 Excel 导出导入失败**：中文版 Excel（及德语/法语等区域设置）另存 CSV 默认用分号 `;` 分隔，而 CsvUtil 写死用逗号 `,`，导致整行被当成一个字段、表头只解析出 1 列、所有数据导不进来。新增 `DetectSeparator`：读取时统计第一行逗号与分号出现次数，自动选多的作为分隔符。
+- **UTF-8 BOM 残留到首字段**：`Read` 开头剥离 `\uFEFF`，防止表头首字段变成 `\uFEFFkey` 导致匹配失败。
+
+---
+
+## [2.2.1] - 2026-06-18
+
+审查修复：4 个阻断级 + 7 个重要级缺陷（共 11 项）。
+
+### 阻断级修复
+- **Android + StreamingAssets 无法初始化**：新增 `Localization.InitializeAsync` / `InitializeAsync(settings, loader)`（异步加载初始+默认语言，全程主线程应用状态）；`LocalizationInitializer` 加 `useAsyncInitialization` 开关 + `InitializeAsync()` 方法；`ApplyLanguageAsync` 内异步预加载默认语言（不再用同步 LoadLocale 在 Android 崩溃）。
+- **批量填充默认语言逻辑错误**：`KeysTab.DoFillMissingFromDefault` 改用 `settings.DefaultLanguageCode` 查找默认 locale（原误用 `locales[0]`，列表顺序不可靠）。
+- **localesPath 变更丢语言**：Settings 面板检测路径变化，显示迁移预览 + 「迁移文件并应用路径」按钮（同模式下路径间迁移）。
+- **路径非法字符无校验**：新增 `IsPathSafe` 校验（拒绝绝对路径、盘符、反斜杠、非法字符），错误时显示红色提示。
+
+### 重要级修复
+- **异步竞态（最后完成者覆盖）**：引入 `_applyEpoch` 请求序号；`SetLanguageAsync`/`SetLanguage`/早返回分支均递增 epoch；`ApplyLanguageAsync` 加载完成后校验 epoch，过期则丢弃（彻底解决连续异步切换、异步中插同步、异步中选当前三种竞态）。
+- **桌面/iOS 异步缓存非线程安全**：`StreamingAssetsLocalizationLoader.LoadLocaleAsync` 在 `RunOnThreadPool` 读完文件后 `SwitchToMainThread` 再写 `_localeCache`（Dictionary 非线程安全）。
+- **Initialize 不重置静态状态**：新增 `ResetState`，`Initialize`/`InitializeAsync` 首先重置 `_currentLocale`/`_defaultLocale` 等，避免换 Loader 后旧数据残留。
+- **FormatMixed 命名值未转义大括号**：`FormatNamed` 替换命名值时调用 `EscapeBraces`（`{`→`{{`、`}`→`}}`），防止值含 `{0}` 被 string.Format 误解析。
+- **KeysTab 行选中点击判定不可靠**：命中判定移进 `HorizontalScope` 内用 `rowScope.rect`，加 `Use()` 消费事件，避免点按钮误触发行选中。
+- **KeysTab 每帧全量过滤排序**：新增 `_visibleKeysCache` + 脏标记，仅在 search/onlyMissing/sortColumn/sortDescending/数据量变化时重算，大数据量不再每帧卡顿。
+- **迁移资源未提示**：Resources→StreamingAssets 迁移确认对话框与结果提示明确告知本地化资源（Sprite/Audio/Font）不迁移且 StreamingAssets 不支持加载，需手动处理。
+- **列宽所有语言列共享**：改为按语言代码独立存储（`Dictionary<string,float>`），拖拽某一语言列只影响该列（原拖一个全变）。
+- **KeyPickerWindow 搜索每按键全量 ToLowerInvariant**：构造时预计算每个 key 的小写形式缓存，搜索用 `IndexOf(OrdinalIgnoreCase)` 免分配匹配，万 key 输入不再卡顿。
+
+### 技术细节
+- epoch 用 `System.Threading.Interlocked.Increment`（long 在 32 位平台非原子）。
+- 异步路径默认语言预加载（`PreloadDefaultLocaleAsync`）与同步路径（`PreloadDefaultLocaleSync` 带 NotSupportedException catch）分离，各自容错。
+- `ApplyLoadedLocale` 不再内联同步 LoadLocale 预加载，改由调用方负责（避免异步路径误用同步）。
+- 列宽独立：`GetLangColumnWidth`/`SetLangColumnWidth` 按语言 code 读写 `_langColumnWidths`，未命中用默认值 200。
+
+---
+
 ## [2.2.0] - 2026-06-18
 
 可配置资源加载方式（Resources / StreamingAssets）+ 自动迁移。

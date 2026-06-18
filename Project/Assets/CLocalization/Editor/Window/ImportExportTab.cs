@@ -71,7 +71,7 @@ namespace CLocalization.Editor
             }
         }
 
-        /// <summary>导入 CSV：弹文件打开对话框，导入后刷新。</summary>
+        /// <summary>导入 CSV：弹文件打开对话框，导入后刷新缓存（不读盘覆盖）。</summary>
         private void ImportCsv(LocalizationWindow window, List<LocaleData> locales)
         {
             string path = EditorUtility.OpenFilePanel("导入 CSV", "", "csv");
@@ -80,10 +80,12 @@ namespace CLocalization.Editor
             try
             {
                 var stats = LocalizationImportExport.ImportFromCsv(path, locales);
-                // 通知 Keys/Diagnostics 重建 key 缓存
-                window.Reload();
+                // 关键：导入数据已写入 locales（窗口的 _locales 引用），
+                // 这里只能刷新各 Tab 的 key 缓存，绝不能调 Reload（Reload 会从磁盘重新加载，覆盖刚导入的内存数据）。
+                window.RefreshCaches();
+                window.MarkDirty(); // 标记未保存，提示用户点「保存全部」写入磁盘
                 EditorUtility.DisplayDialog("导入成功",
-                    $"新增 {stats.AddedKeys} 个 key，更新 {stats.UpdatedKeys} 个翻译。\n请点击「保存全部」写入磁盘。",
+                    $"新增 {stats.AddedKeys} 个 key，更新 {stats.UpdatedKeys} 个翻译。\n请点击窗口右上角「保存全部」写入磁盘。",
                     "确定");
             }
             catch (System.Exception ex)
