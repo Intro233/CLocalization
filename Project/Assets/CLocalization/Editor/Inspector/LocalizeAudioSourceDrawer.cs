@@ -24,10 +24,7 @@ namespace CLocalization.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("autoPlayIfPlaying"), true);
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.HelpBox(
-                "AudioClip 资源需放在：Resources/CLocalization/Assets/{语言代码}/{key}\n" +
-                "切换语言时自动加载对应音频（若之前正在播放则恢复播放）。",
-                MessageType.Info);
+            EditorGUILayout.HelpBox("AudioClip 资源位置（切换语言时自动加载并恢复播放）：\n" + LocalizationEditorData.GetAssetsHintMessage(), MessageType.Info);
 
             serializedObject.ApplyModifiedProperties();
         }

@@ -34,10 +34,7 @@ namespace CLocalization.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("refreshOnEnable"), true);
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.HelpBox(
-                "字体资源需放在：Resources/CLocalization/Assets/{语言代码}/{key}\n" +
-                "TMP 用 TMP_FontAsset，传统 Text 用 Font。根据挂载目标自动选择类型。",
-                MessageType.Info);
+            EditorGUILayout.HelpBox("字体资源位置（TMP 用 TMP_FontAsset，传统 Text 用 Font，自动选择类型）：\n" + LocalizationEditorData.GetAssetsHintMessage(), MessageType.Info);
 
             serializedObject.ApplyModifiedProperties();
         }

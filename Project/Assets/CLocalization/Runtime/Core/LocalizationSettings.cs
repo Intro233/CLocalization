@@ -40,6 +40,19 @@ namespace CLocalization
         [Tooltip("查询最终失败时是否输出警告日志")]
         [SerializeField] private bool logMissingKeys = true;
 
+        [Header("资源加载")]
+        /// <summary>资源加载方式（Resources / StreamingAssets）。决定运行时从哪个容器加载。</summary>
+        [Tooltip("资源加载方式：Resources（默认，支持文本+资源）或 StreamingAssets（仅文本，可热更新）")]
+        [SerializeField] private AssetLoadMode assetLoadMode = AssetLoadMode.Resources;
+
+        /// <summary>语言文本 JSON 子路径（不含容器根，如 CLocalization/Locales）。</summary>
+        [Tooltip("语言文本 JSON 子路径（不含容器根），如 CLocalization/Locales")]
+        [SerializeField] private string localesPath = "CLocalization/Locales";
+
+        /// <summary>本地化资源（Sprite/Audio/Font）子路径（如 CLocalization/Assets）。仅 Resources 模式生效。</summary>
+        [Tooltip("本地化资源（Sprite/Audio/Font）子路径，如 CLocalization/Assets。仅 Resources 模式支持")]
+        [SerializeField] private string assetsPath = "CLocalization/Assets";
+
         // ---------- 运行时访问器 ----------
 
         /// <summary>可用语言列表（只读视图）。</summary>
@@ -59,6 +72,15 @@ namespace CLocalization
 
         /// <summary>是否输出缺失 key 警告。</summary>
         public bool LogMissingKeys => logMissingKeys;
+
+        /// <summary>资源加载方式。</summary>
+        public AssetLoadMode AssetLoadMode => assetLoadMode;
+
+        /// <summary>语言文本 JSON 子路径。</summary>
+        public string LocalesPath => string.IsNullOrEmpty(localesPath) ? "CLocalization/Locales" : localesPath;
+
+        /// <summary>本地化资源子路径。</summary>
+        public string AssetsPath => string.IsNullOrEmpty(assetsPath) ? "CLocalization/Assets" : assetsPath;
 
         /// <summary>根据语言代码查找 LanguageInfo，找不到返回 null。</summary>
         public LanguageInfo FindLanguage(string code)

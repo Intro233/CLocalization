@@ -188,7 +188,7 @@ namespace CLocalization.Editor
         {
             if (locales == null || locales.Count == 0)
             {
-                EditorGUILayout.HelpBox("暂无语言数据。请到「语言」Tab 添加语言，或检查 Resources/CLocalization/Locales 目录。", MessageType.Info);
+                EditorGUILayout.HelpBox("暂无语言数据。请到「语言」Tab 添加语言，或检查语言目录：" + LocalizationEditorData.LocalesDirectory, MessageType.Info);
                 return;
             }
 

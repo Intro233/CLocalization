@@ -6,6 +6,33 @@
 
 ---
 
+## [2.2.0] - 2026-06-18
+
+可配置资源加载方式（Resources / StreamingAssets）+ 自动迁移。
+
+### 新增
+- **AssetLoadMode 枚举**：`Resources`（默认）/ `StreamingAssets`，在 LocalizationSettings 配置。
+- **路径完全可配**：LocalizationSettings 新增 `LocalesPath`/`AssetsPath` 字段（子路径可自定义，默认 `CLocalization/Locales`/`CLocalization/Assets`）。
+- **StreamingAssetsLocalizationLoader**：从 StreamingAssets 加载语言 JSON。文本跨平台（编辑器/桌面 File.ReadAllText，Android UnityWebRequest）；资源（Sprite/Audio/Font）不支持并告警。
+- **Localization.Initialize 工厂分支**：根据 `settings.AssetLoadMode` 自动选择 Resources 或 StreamingAssets Loader。
+- **Loader 构造注入路径**：两个内置 Loader 改为接收 localesPath/assetsPath（保留无参构造走默认，向后兼容）。
+- **自动迁移工具**（`LocalizationAssetMigrator`）：切换加载方式时把语言 JSON 从旧目录复制到新目录，删除旧文件，刷新 AssetDatabase。
+- **Settings 面板**：LoadMode 下拉、路径配置、当前目录显示、迁移预览与按钮、刷新语言列表按钮。
+- **AssetPostprocessor 适配**：监控两种模式的目录前缀，迁移期间也能感知变化。
+- **动态文案**：Inspector 资源提示、KeysTab 目录提示按当前模式动态显示。
+
+### 限制（StreamingAssets 模式）
+- 仅支持文本本地化；Unity 资源（Sprite/Audio/Font）需 Resources 或自定义 Loader。
+- Android 平台必须用 `SetLanguageAsync`（同步 LoadLocale 抛 NotSupportedException）。
+- Project 窗口拖入 JSON 不自动同步（StreamingAssets 原始文本不被导入），需手动「刷新语言列表」。
+
+### 向后兼容
+- 默认仍为 Resources 模式，旧配置零迁移。
+- `ResourcesLocalizationLoader` 无参构造保留（向后兼容旧代码）。
+- Settings 资产（LocalizationSettings.asset）始终留在 Resources（运行时 Resources.Load 加载它）。
+
+---
+
 ## [2.1.0] - 2026-06-18
 
 编辑器窗口交互优化（排序、批量操作、导航、快捷键）。

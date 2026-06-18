@@ -12,14 +12,76 @@ namespace CLocalization.Editor
     /// </summary>
     public static class LocalizationEditorData
     {
-        /// <summary>语言 JSON 文件所在的绝对目录（Assets 下，即 Resources 目录）。</summary>
+        /// <summary>缓存当前模式的语言目录绝对路径，避免每帧重复 LoadOrCreateSettings。</summary>
+        private static string _cachedLocalesDirectory;
+        /// <summary>缓存时的 LoadMode + LocalesPath，用于检测配置变化并失效缓存。</summary>
+        private static AssetLoadMode _cachedMode;
+        private static string _cachedLocalesPath;
+
+        /// <summary>当前模式下的语言 JSON 文件绝对目录（按 Settings 的 AssetLoadMode 解析，带缓存）。</summary>
         public static string LocalesDirectory
         {
             get
             {
-                // Application.dataPath 指向 Assets，拼接 Resources/CLocalization/Locales
-                return Path.Combine(Application.dataPath, "CLocalization/Resources/CLocalization/Locales");
+                var settings = LocalizationSetup.LoadOrCreateSettings();
+                if (settings == null)
+                {
+                    // 无 Settings 时回退默认 Resources 目录
+                    return Path.Combine(Application.dataPath, "CLocalization/Resources/CLocalization/Locales");
+                }
+
+                // 缓存命中：mode 与 path 未变时直接返回
+                if (_cachedLocalesDirectory != null
+                    && _cachedMode == settings.AssetLoadMode
+                    && _cachedLocalesPath == settings.LocalesPath)
+                {
+                    return _cachedLocalesDirectory;
+                }
+
+                _cachedMode = settings.AssetLoadMode;
+                _cachedLocalesPath = settings.LocalesPath;
+                _cachedLocalesDirectory = GetLocalesDirectory(settings.AssetLoadMode, settings.LocalesPath);
+                return _cachedLocalesDirectory;
             }
+        }
+
+        /// <summary>
+        /// 根据加载方式与 localesPath 计算语言 JSON 文件的绝对磁盘目录。
+        /// Resources 模式：{Assets}/CLocalization/Resources/{localesPath}
+        /// StreamingAssets 模式：{Assets}/StreamingAssets/{localesPath}
+        /// 供 LocalesDirectory 属性与迁移工具共用。
+        /// </summary>
+        public static string GetLocalesDirectory(AssetLoadMode mode, string localesPath)
+        {
+            string containerRoot = mode == AssetLoadMode.StreamingAssets
+                ? "StreamingAssets"
+                : "CLocalization/Resources";
+            string sub = string.IsNullOrEmpty(localesPath) ? "CLocalization/Locales" : localesPath;
+            return Path.Combine(Application.dataPath, Path.Combine(containerRoot, sub));
+        }
+
+        /// <summary>失效缓存的目录（迁移或 Settings 变更后调用，强制下次重新解析）。</summary>
+        public static void InvalidateDirectoryCache()
+        {
+            _cachedLocalesDirectory = null;
+        }
+
+        /// <summary>
+        /// 获取当前模式下本地化资源（Sprite/Audio/Font）的放置提示文案。
+        /// Resources 模式：Resources/{assetsPath}/{语言}/{key}
+        /// StreamingAssets 模式：提示不支持 Unity 资源。
+        /// </summary>
+        public static string GetAssetsHintMessage()
+        {
+            var settings = LocalizationSetup.LoadOrCreateSettings();
+            if (settings != null && settings.AssetLoadMode == AssetLoadMode.StreamingAssets)
+            {
+                return "⚠ 当前为 StreamingAssets 模式，不支持加载 Unity 资源（Sprite/Audio/Font）。\n" +
+                       "如需本地化资源，请在 Project Settings > CLocalization 切换为 Resources 模式。";
+            }
+            string assetsPath = settings != null ? settings.AssetsPath : "CLocalization/Assets";
+            return $"资源需放在：Resources/{assetsPath}/{{语言代码}}/{{key}}\n" +
+                   "切换语言时自动加载对应资源。";
         }
 
         /// <summary>Settings 资源相对路径（相对 Assets）。</summary>

@@ -22,12 +22,9 @@ namespace CLocalization.Editor
             EditorGUILayout.Space(4);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("refreshOnEnable"), true);
 
-            // 提示资源目录约定
+            // 提示资源目录约定（按当前加载模式动态显示）
             EditorGUILayout.Space(4);
-            EditorGUILayout.HelpBox(
-                "Sprite 资源需放在：Resources/CLocalization/Assets/{语言代码}/{key}\n" +
-                "切换语言时自动加载对应 Sprite。",
-                MessageType.Info);
+            EditorGUILayout.HelpBox("Sprite 资源位置：\n" + LocalizationEditorData.GetAssetsHintMessage(), MessageType.Info);
 
             serializedObject.ApplyModifiedProperties();
         }

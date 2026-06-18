@@ -139,6 +139,26 @@ Localization.Get("msg", new { name = "Player" }, 3);
 localizeText.SetNamedArgs(new { name = "Player", count = 3 });
 ```
 
+### 资源加载方式（可配置 + 自动迁移）
+
+插件内置两种加载方式，在 `Project Settings > CLocalization` 的「资源加载方式」中切换。切换时**自动迁移**已有的语言 JSON 文件到新目录。
+
+| 模式 | 容器 | 文本 | 资源(Sprite/Audio/Font) | 热更新 |
+|---|---|---|---|---|
+| **Resources**（默认） | `Resources/{localesPath}/` | ✅ | ✅ | ❌ |
+| **StreamingAssets** | `StreamingAssets/{localesPath}/` | ✅ | ❌ | ✅（可外部修改） |
+
+**路径完全可配**：`LocalesPath`（如 `CLocalization/Locales`）和 `AssetsPath`（如 `CLocalization/Assets`）均可在 Settings 修改。
+
+**切换方式**：Project Settings 面板改 LoadMode 下拉 → 自动弹出迁移预览（源/目标目录、文件数）→ 点「迁移资源并应用」即可。
+
+**StreamingAssets 模式限制**（重要）：
+- 仅支持**文本**本地化；Sprite/Audio/Font 需用 Resources 或自定义 Loader
+- **Android 平台必须用异步** `SetLanguageAsync`（同步 `LoadLocale` 抛 NotSupportedException）
+- Project 窗口拖入 JSON 不会自动同步 Settings，需点「刷新语言列表」按钮
+
+> 需要 Addressables / 远端加载？实现 `ILocalizationLoader` 接口，用 `Initialize(settings, customLoader)` 注入（见下节）。
+
 ### 资源加载层（可扩展，支持异步）
 
 默认 `ResourcesLocalizationLoader` 从 `Resources/CLocalization/Locales/{code}.json` 加载（同步瞬时）。

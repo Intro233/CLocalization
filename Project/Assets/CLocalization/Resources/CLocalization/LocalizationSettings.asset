@@ -34,3 +34,6 @@ MonoBehaviour:
   useSystemLanguageByDefault: 1
   fallbackToDefaultLanguage: 1
   logMissingKeys: 1
+  assetLoadMode: 0
+  localesPath: CLocalization/Locales
+  assetsPath: CLocalization/Assets

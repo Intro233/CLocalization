@@ -68,12 +68,36 @@ namespace CLocalization
 
         /// <summary>
         /// 使用指定配置初始化本地化系统。
-        /// 默认使用 <see cref="ResourcesLocalizationLoader"/>，并按优先级解析初始语言
-        /// （上次选择 → 系统语言 → 默认语言）。
+        /// 根据 settings.AssetLoadMode 自动选择对应 Loader（Resources / StreamingAssets）。
+        /// 若需自定义 Loader（如 Addressables / 远端），用 <see cref="Initialize(LocalizationSettings, ILocalizationLoader)"/> 重载手动注入。
+        /// 初始化按优先级解析初始语言（上次选择 → 系统语言 → 默认语言）。
         /// </summary>
         public static void Initialize(LocalizationSettings settings)
         {
-            Initialize(settings, new ResourcesLocalizationLoader());
+            if (settings == null)
+            {
+                LocalizationLog.Error("初始化失败：LocalizationSettings 为空。");
+                return;
+            }
+
+            // 根据配置的加载方式选择内置 Loader
+            ILocalizationLoader loader = CreateDefaultLoader(settings);
+            Initialize(settings, loader);
+        }
+
+        /// <summary>
+        /// 根据 AssetLoadMode 创建对应内置 Loader（注入 Settings 中配置的路径）。
+        /// </summary>
+        private static ILocalizationLoader CreateDefaultLoader(LocalizationSettings settings)
+        {
+            switch (settings.AssetLoadMode)
+            {
+                case AssetLoadMode.StreamingAssets:
+                    return new StreamingAssetsLocalizationLoader(settings.LocalesPath, settings.AssetsPath);
+                case AssetLoadMode.Resources:
+                default:
+                    return new ResourcesLocalizationLoader(settings.LocalesPath, settings.AssetsPath);
+            }
         }
 
         /// <summary>
@@ -344,7 +368,18 @@ namespace CLocalization
         /// </summary>
         private static void ApplyLanguage(string code, bool persist, bool fireEvent)
         {
-            var locale = _loader.LoadLocale(code);
+            LocaleData locale;
+            try
+            {
+                locale = _loader.LoadLocale(code);
+            }
+            catch (System.NotSupportedException ex)
+            {
+                // 某些 Loader（如 StreamingAssets 在 Android）不支持同步加载，降级告警而非崩溃。
+                // 调用方应改用 SetLanguageAsync / ApplyLanguageAsync。
+                LocalizationLog.Warning($"同步加载语言 \"{code}\" 不受支持（{ex.Message}）。请使用 SetLanguageAsync。");
+                return;
+            }
             if (locale == null)
             {
                 // 加载失败：保持旧语言状态（code/locale/culture 都不动），不持久化、不触发事件。

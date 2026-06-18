@@ -10,8 +10,26 @@ namespace CLocalization.Editor
     /// </summary>
     public class LocalizationAssetPostprocessor : AssetPostprocessor
     {
-        /// <summary>Locales 目录在 Assets 下的相对路径前缀（用于判断资源是否属于语言文件）。</summary>
-        private const string LocalesPathPrefix = "Assets/CLocalization/Resources/CLocalization/Locales/";
+        /// <summary>Resources 模式下 Locales 目录的 Assets 相对前缀。</summary>
+        private const string ResourcesLocalesPrefix = "Assets/CLocalization/Resources/CLocalization/Locales/";
+
+        /// <summary>StreamingAssets 模式下 Locales 目录的 Assets 相对前缀。</summary>
+        private const string StreamingAssetsLocalesPrefix = "Assets/StreamingAssets/CLocalization/Locales/";
+
+        /// <summary>
+        /// 获取当前模式对应的 Locales 目录 Assets 相对前缀。
+        /// 注意：StreamingAssets 的 JSON 是原始文本，Unity 默认不导入为 Asset，
+        /// 因此 OnPostprocessAllAssets 在 StreamingAssets 模式下可能不触发——需手动点「刷新语言列表」。
+        /// </summary>
+        private static string GetCurrentLocalesPrefix()
+        {
+            var settings = LocalizationSetup.LoadOrCreateSettings();
+            if (settings == null) return ResourcesLocalesPrefix;
+            string containerRoot = settings.AssetLoadMode == AssetLoadMode.StreamingAssets
+                ? "StreamingAssets"
+                : "CLocalization/Resources";
+            return "Assets/" + containerRoot + "/" + settings.LocalesPath + "/";
+        }
 
         /// <summary>
         /// Unity 在资源导入完成后回调。签名固定，不可改名。
@@ -51,16 +69,24 @@ namespace CLocalization.Editor
                 || AffectsLocales(movedFromAssetPaths);
         }
 
-        /// <summary>给定路径列表中是否有 Locales 目录下的 .json 文件。</summary>
+        /// <summary>给定路径列表中是否有任一模式的 Locales 目录下的 .json 文件。</summary>
+        /// <remarks>同时检查当前模式与另一种模式的前缀，确保迁移期间也能感知变化。</remarks>
         private static bool AffectsLocales(string[] paths)
         {
             if (paths == null) return false;
+            // 当前模式前缀 + 另一模式前缀都纳入监控（迁移时文件在两目录间移动）
+            string currentPrefix = GetCurrentLocalesPrefix();
             foreach (string path in paths)
             {
                 if (path == null) continue;
-                // 必须在 Locales 目录下且是 .json 后缀
-                if (path.StartsWith(LocalesPathPrefix, System.StringComparison.OrdinalIgnoreCase)
-                    && path.EndsWith(LocalizationPaths.LocaleExtension, System.StringComparison.OrdinalIgnoreCase))
+                if (!path.EndsWith(LocalizationPaths.LocaleExtension, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                // 命中当前模式或任一固定模式前缀
+                if (path.StartsWith(currentPrefix, System.StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWith(ResourcesLocalesPrefix, System.StringComparison.OrdinalIgnoreCase)
+                    || path.StartsWith(StreamingAssetsLocalesPrefix, System.StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }
