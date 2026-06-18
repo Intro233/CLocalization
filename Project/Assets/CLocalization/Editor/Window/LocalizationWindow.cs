@@ -105,6 +105,18 @@ namespace CLocalization.Editor
             Repaint();
         }
 
+        /// <summary>
+        /// 切换到词条 Tab 并定位到指定 key（供 DiagnosticsTab 等模块跳转编辑）。
+        /// </summary>
+        /// <param name="key">要定位的 key</param>
+        /// <param name="searchFilter">可选的搜索过滤（如仅看该 key）</param>
+        public void NavigateToKey(string key, string searchFilter = null)
+        {
+            _currentTab = 0; // 切到词条 Tab
+            _keysTab?.FocusKey(key, searchFilter);
+            Repaint();
+        }
+
         private void OnGUI()
         {
             DrawToolbar();
@@ -132,6 +144,49 @@ namespace CLocalization.Editor
                 case 3:
                     _diagnosticsTab.Draw(this, _locales);
                     break;
+            }
+
+            // 快捷键（窗口聚焦时生效）
+            HandleShortcuts();
+        }
+
+        /// <summary>处理全局快捷键：Ctrl+S 保存、Ctrl+F 聚焦搜索、Delete 删除选中 key。</summary>
+        private void HandleShortcuts()
+        {
+            Event e = Event.current;
+            if (e.type != EventType.KeyDown) return;
+
+            // Ctrl+S（Mac 上是 Command+S）：保存全部
+            if ((e.control || e.command) && e.keyCode == KeyCode.S)
+            {
+                SaveAll();
+                e.Use();
+                return;
+            }
+
+            // 仅在词条 Tab 生效的快捷键
+            if (_currentTab != 0) return;
+
+            // Ctrl+F：聚焦搜索框
+            if ((e.control || e.command) && e.keyCode == KeyCode.F)
+            {
+                _keysTab.FocusSearch();
+                e.Use();
+                return;
+            }
+
+            // Delete：删除当前选中的 key
+            if (e.keyCode == KeyCode.Delete || e.keyCode == KeyCode.Backspace)
+            {
+                string selected = _keysTab.GetSelectedKey();
+                if (!string.IsNullOrEmpty(selected))
+                {
+                    if (EditorUtility.DisplayDialog("删除 key", $"确认删除 key \"{selected}\" 及其在所有语言中的翻译？", "删除", "取消"))
+                    {
+                        _keysTab.DeleteSelectedKey(_locales);
+                    }
+                    e.Use();
+                }
             }
         }
 
@@ -208,6 +263,25 @@ namespace CLocalization.Editor
                     return;
                 }
             }
+        }
+
+        /// <summary>移动语言顺序（供 LanguagesTab 调用）。影响 KeysTab 列顺序与 CSV 导出顺序。</summary>
+        /// <param name="fromIndex">原索引</param>
+        /// <param name="toIndex">目标索引</param>
+        public void MoveLanguage(int fromIndex, int toIndex)
+        {
+            if (fromIndex < 0 || fromIndex >= _locales.Count) return;
+            if (toIndex < 0 || toIndex >= _locales.Count) return;
+            if (fromIndex == toIndex) return;
+
+            var locale = _locales[fromIndex];
+            _locales.RemoveAt(fromIndex);
+            _locales.Insert(toIndex, locale);
+
+            // 刷新各 Tab（KeysTab 列顺序依赖 _locales 顺序）
+            _keysTab.OnDataChanged(_locales);
+            _diagnosticsTab.OnDataChanged(_locales);
+            MarkDirty();
         }
     }
 }

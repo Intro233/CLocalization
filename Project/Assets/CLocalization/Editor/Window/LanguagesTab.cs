@@ -31,11 +31,33 @@ namespace CLocalization.Editor
                 var locale = locales[i];
                 using (new EditorGUILayout.HorizontalScope(GUI.skin.box))
                 {
+                    // 序号
+                    EditorGUILayout.LabelField($"{i + 1}", GUILayout.Width(28));
                     EditorGUILayout.LabelField(locale.Meta?.Code ?? "?", GUILayout.Width(100));
                     EditorGUILayout.LabelField(locale.Meta?.DisplayName ?? "", GUILayout.Width(120));
                     int entryCount = locale.Entries?.Count ?? 0;
                     EditorGUILayout.LabelField($"{entryCount} 词条", GUILayout.Width(80));
                     GUILayout.FlexibleSpace();
+
+                    // 上移（第一个禁用）
+                    using (new EditorGUI.DisabledScope(i == 0))
+                    {
+                        if (GUILayout.Button("↑", GUILayout.Width(28)))
+                        {
+                            window.MoveLanguage(i, i - 1);
+                            SyncSettings(window);
+                        }
+                    }
+                    // 下移（最后一个禁用）
+                    using (new EditorGUI.DisabledScope(i == locales.Count - 1))
+                    {
+                        if (GUILayout.Button("↓", GUILayout.Width(28)))
+                        {
+                            window.MoveLanguage(i, i + 1);
+                            SyncSettings(window);
+                        }
+                    }
+
                     if (GUILayout.Button("删除", GUILayout.Width(50)))
                     {
                         string code = locale.Meta?.Code;

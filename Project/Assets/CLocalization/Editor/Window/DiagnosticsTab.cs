@@ -19,6 +19,8 @@ namespace CLocalization.Editor
         private Vector2 _scroll;
         /// <summary>未使用 key 滚动位置。</summary>
         private Vector2 _unusedScroll;
+        /// <summary>当前窗口引用（供跳转编辑调用 NavigateToKey）。</summary>
+        private LocalizationWindow _window;
 
         public void OnDataChanged(List<LocaleData> locales)
         {
@@ -28,6 +30,7 @@ namespace CLocalization.Editor
 
         public void Draw(LocalizationWindow window, List<LocaleData> locales)
         {
+            _window = window;
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("诊断", EditorStyles.boldLabel);
@@ -97,6 +100,11 @@ namespace CLocalization.Editor
                     GUILayout.Label("缺失于:", GUILayout.Width(60));
                     GUILayout.Label(string.Join(", ", entry.Value));
                     GUILayout.FlexibleSpace();
+                    // 跳转到词条 Tab 编辑该 key
+                    if (GUILayout.Button("编辑", GUILayout.Width(50)))
+                    {
+                        _window?.NavigateToKey(entry.Key);
+                    }
                 }
             }
             EditorGUILayout.EndScrollView();

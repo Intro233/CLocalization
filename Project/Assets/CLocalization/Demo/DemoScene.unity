@@ -388,7 +388,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   refreshOnEnable: 1
-  localizationKey: common.back
+  localizationKey: common.ok
   tmpText: {fileID: 0}
   uiText: {fileID: 0}
   formatArgs: []
