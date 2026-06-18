@@ -40,6 +40,14 @@ namespace CLocalization.Editor
             string[] movedAssets,
             string[] movedFromAssetPaths)
         {
+            // 任何 Prefab/Scene/Script 变化都失效引用扫描缓存（未使用 key 检测依赖这些）
+            // 这是轻量操作，不需要 delayCall
+            if (AffectsReferences(importedAssets) || AffectsReferences(deletedAssets)
+                || AffectsReferences(movedAssets) || AffectsReferences(movedFromAssetPaths))
+            {
+                LocalizationReferenceScanner.InvalidateCache();
+            }
+
             if (!ShouldHandle(importedAssets, deletedAssets, movedAssets, movedFromAssetPaths))
             {
                 return;
@@ -67,6 +75,23 @@ namespace CLocalization.Editor
                 || AffectsLocales(deletedAssets)
                 || AffectsLocales(movedAssets)
                 || AffectsLocales(movedFromAssetPaths);
+        }
+
+        /// <summary>给定路径列表中是否有 Prefab/Scene/Script（影响引用扫描缓存）。</summary>
+        private static bool AffectsReferences(string[] paths)
+        {
+            if (paths == null) return false;
+            foreach (string path in paths)
+            {
+                if (string.IsNullOrEmpty(path)) continue;
+                if (path.EndsWith(".prefab", System.StringComparison.OrdinalIgnoreCase)
+                    || path.EndsWith(".unity", System.StringComparison.OrdinalIgnoreCase)
+                    || path.EndsWith(".cs", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
 
         /// <summary>给定路径列表中是否有任一模式的 Locales 目录下的 .json 文件。</summary>

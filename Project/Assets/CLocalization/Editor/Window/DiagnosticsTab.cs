@@ -35,8 +35,14 @@ namespace CLocalization.Editor
             {
                 EditorGUILayout.LabelField("诊断", EditorStyles.boldLabel);
                 GUILayout.FlexibleSpace();
-                if (GUILayout.Button("运行检测", GUILayout.Width(100)))
+                if (GUILayout.Button("运行检测", GUILayout.Width(80)))
                 {
+                    _result = RunDiagnostics(locales);
+                }
+                // 强制失效引用扫描缓存后重新检测（场景/Prefab 改动后用此刷新引用）
+                if (GUILayout.Button("重新扫描引用", GUILayout.Width(100)))
+                {
+                    LocalizationReferenceScanner.InvalidateCache();
                     _result = RunDiagnostics(locales);
                 }
             }

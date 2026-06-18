@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Text;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace CLocalization.Editor
 {
@@ -15,6 +17,18 @@ namespace CLocalization.Editor
     /// </summary>
     public static class LocalizationReferenceScanner
     {
+        /// <summary>缓存的组件引用扫描结果（避免每次诊断都全量扫描 Scene/Prefab，场景扫描开销大）。</summary>
+        private static Dictionary<string, List<KeyReference>> _cachedCompRefs;
+        /// <summary>缓存的源码字面量引用（避免每次重读所有 .cs）。</summary>
+        private static HashSet<string> _cachedSrcRefs;
+
+        /// <summary>清除引用扫描缓存（场景/Prefab 保存、资源导入、或用户强制重扫时调用）。</summary>
+        public static void InvalidateCache()
+        {
+            _cachedCompRefs = null;
+            _cachedSrcRefs = null;
+        }
+
         /// <summary>单个 key 引用位置。</summary>
         public struct KeyReference
         {
@@ -33,27 +47,67 @@ namespace CLocalization.Editor
 
         /// <summary>
         /// 扫描所有 Prefab 与 Scene，返回「key → 引用列表」。
+        /// 结果缓存：首次扫描后缓存，重复调用直接返回（用 InvalidateCache 失效）。
         /// key 为空字符串的引用会被跳过。
         /// </summary>
         public static Dictionary<string, List<KeyReference>> ScanAllReferences()
         {
+            // 缓存命中：避免每次诊断都全量扫描（场景扫描开销大）
+            if (_cachedCompRefs != null) return _cachedCompRefs;
+
             var result = new Dictionary<string, List<KeyReference>>();
 
-            // 收集所有 Prefab 和 Scene 资源
+            // 收集所有 Prefab 和 Scene 资源，分开处理（Scene 必须用 OpenScene，否则 LoadAllAssetsAtPath 会触发警告）
             string[] guids = AssetDatabase.FindAssets("t:Prefab t:Scene");
-            foreach (string guid in guids)
+            int total = guids.Length;
+            bool cancelled = false;
+            for (int i = 0; i < total; i++)
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                // 进度条（模态，扫描大量资源时告知用户进度）
+                if (total > 5 && i % 3 == 0)
+                {
+                    bool cancel = EditorUtility.DisplayCancelableProgressBar(
+                        "扫描本地化引用",
+                        $"扫描中 ({i + 1}/{total}): {System.IO.Path.GetFileName(path)}",
+                        (float)i / total);
+                    if (cancel)
+                    {
+                        LocalizationLog.Info("用户取消了引用扫描。");
+                        cancelled = true;
+                        break;
+                    }
+                }
                 ScanAsset(path, result);
             }
+            EditorUtility.ClearProgressBar();
+            // 仅在完整扫描完成时缓存（取消时不缓存，下次重新扫描）
+            if (!cancelled) _cachedCompRefs = result;
             return result;
         }
 
         /// <summary>扫描单个资源（Prefab/Scene）内所有 LocalizeBase 子类的 key 字段。</summary>
         private static void ScanAsset(string assetPath, Dictionary<string, List<KeyReference>> result)
         {
-            // 加载资源，查找所有 LocalizeBase 子类组件
-            // 注意：Scene 需用 GetAssetPath + OpenScene 方式，这里用较轻量的 LoadAllAssetsAtPath
+            if (string.IsNullOrEmpty(assetPath)) return;
+
+            bool isScene = assetPath.EndsWith(".unity", System.StringComparison.OrdinalIgnoreCase);
+            if (isScene)
+            {
+                ScanScene(assetPath, result);
+            }
+            else
+            {
+                ScanPrefab(assetPath, result);
+            }
+        }
+
+        /// <summary>
+        /// 扫描 Prefab：用 LoadAllAssetsAtPath 加载所有对象，查找 LocalizeBase 组件。
+        /// （Prefab 不是场景，LoadAllAssetsAtPath 不会触发警告。）
+        /// </summary>
+        private static void ScanPrefab(string assetPath, Dictionary<string, List<KeyReference>> result)
+        {
             Object[] assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
             if (assets == null) return;
 
@@ -61,15 +115,50 @@ namespace CLocalization.Editor
             {
                 if (obj is LocalizeBase comp && comp != null)
                 {
-                    // localizationKey（基类字段，所有子类都有）
-                    // 通过 SerializedObject 读取，因为字段是 protected，反射/序列化均可
-                    using (var so = new SerializedObject(comp))
+                    CollectFromComponent(comp, assetPath, result);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 扫描 Scene：用 EditorSceneManager 以只读方式打开场景，遍历所有 LocalizeBase 组件，扫完不保存关闭。
+        /// （Scene 不能用 LoadAllAssetsAtPath——会触发 "Do not use ReadObjectThreaded on scene objects" 警告。）
+        /// </summary>
+        private static void ScanScene(string assetPath, Dictionary<string, List<KeyReference>> result)
+        {
+            Scene scene = EditorSceneManager.OpenScene(assetPath, OpenSceneMode.Additive);
+            if (!scene.isLoaded) return;
+
+            try
+            {
+                // 遍历场景所有根对象的全部子对象，收集 LocalizeBase 组件
+                var roots = scene.GetRootGameObjects();
+                foreach (var root in roots)
+                {
+                    // includeInactive: true 包含未激活的组件
+                    var comps = root.GetComponentsInChildren<LocalizeBase>(true);
+                    if (comps == null) continue;
+                    foreach (var comp in comps)
                     {
-                        CollectKeyField(so, assetPath, comp.GetType().Name, "localizationKey", result);
-                        // LocalizeFont 额外有 fontKey
-                        CollectKeyField(so, assetPath, comp.GetType().Name, "fontKey", result);
+                        if (comp != null) CollectFromComponent(comp, assetPath, result);
                     }
                 }
+            }
+            finally
+            {
+                // 扫描完关闭该场景（不保存，丢弃打开）
+                EditorSceneManager.CloseScene(scene, true);
+            }
+        }
+
+        /// <summary>从单个组件读取 localizationKey / fontKey 并登记到结果。</summary>
+        private static void CollectFromComponent(LocalizeBase comp, string assetPath, Dictionary<string, List<KeyReference>> result)
+        {
+            using (var so = new SerializedObject(comp))
+            {
+                CollectKeyField(so, assetPath, comp.GetType().Name, "localizationKey", result);
+                // LocalizeFont 额外有 fontKey
+                CollectKeyField(so, assetPath, comp.GetType().Name, "fontKey", result);
             }
         }
 
@@ -92,19 +181,33 @@ namespace CLocalization.Editor
 
         /// <summary>
         /// 在所有 .cs 源码中搜索 Localization.Get("xxx") / GetAsset 等字面量引用的 key。
-        /// 返回匹配到的 key 集合（仅作辅助参考，无法保证 100% 准确，因为可能有动态拼接的 key）。
+        /// 结果缓存：首次扫描后缓存，重复调用直接返回（用 InvalidateCache 失效）。
         /// </summary>
         public static HashSet<string> ScanSourceCodeKeyLiterals()
         {
+            if (_cachedSrcRefs != null) return _cachedSrcRefs;
+
             var keys = new HashSet<string>();
             string[] guids = AssetDatabase.FindAssets("t:Script");
-            foreach (string guid in guids)
+            int total = guids.Length;
+            bool cancelled = false;
+            for (int i = 0; i < total; i++)
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string path = AssetDatabase.GUIDToAssetPath(guids[i]);
+                if (total > 20 && i % 10 == 0)
+                {
+                    bool cancel = EditorUtility.DisplayCancelableProgressBar(
+                        "扫描源码引用",
+                        $"扫描脚本 ({i + 1}/{total})",
+                        (float)i / total);
+                    if (cancel) { cancelled = true; break; }
+                }
                 if (!path.EndsWith(".cs")) continue;
                 string text = System.IO.File.ReadAllText(path);
                 ExtractKeysFromSource(text, keys);
             }
+            EditorUtility.ClearProgressBar();
+            if (!cancelled) _cachedSrcRefs = keys;
             return keys;
         }
 

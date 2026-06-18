@@ -6,6 +6,19 @@
 
 ---
 
+## [2.2.5] - 2026-06-18
+
+诊断检测性能优化：进度条 + 结果缓存。
+
+### 改进
+- **扫描进度条**：`ScanAllReferences`（Prefab/Scene 引用扫描）和 `ScanSourceCodeKeyLiterals`（源码字面量扫描）加 `DisplayCancelableProgressBar`，显示当前进度与正在扫描的资源，支持取消。解决大项目扫描几十秒无反馈的问题。
+- **引用扫描结果缓存**：`ScanAllReferences`/`ScanSourceCodeKeyLiterals` 结果缓存，重复「运行检测」直接命中缓存（瞬时完成）。场景扫描的固有开销只首次承担。
+- **自动失效缓存**：`AssetPostprocessor` 检测到 Prefab/Scene/Script 变化时自动 `InvalidateCache`，确保改动后下次检测刷新引用。
+- **手动重扫**：诊断 Tab 加「重新扫描引用」按钮，强制失效缓存后重新检测。
+- 取消扫描时不缓存部分结果（避免缓存不完整数据），下次重新扫描。
+
+---
+
 ## [2.2.4] - 2026-06-18
 
 翻译编辑体验优化：长文本/多行编辑弹窗。
