@@ -366,11 +366,25 @@ namespace CLocalization.Editor
                 // key + 复制按钮
                 using (new EditorGUILayout.HorizontalScope(GUILayout.Width(_keyColumnWidth)))
                 {
-                    EditorGUILayout.LabelField(key, GUILayout.MinWidth(_keyColumnWidth - 28));
-                    if (GUILayout.Button("⧉", EditorStyles.miniButton, GUILayout.Width(24)))
+                    EditorGUILayout.LabelField(key, GUILayout.MinWidth(_keyColumnWidth - 30));
+                    // 复制按钮：用 Unity 内置剪贴板图标（加载失败回退 "CP" 文字）
+                    var copyContent = EditorGUIUtility.IconContent("Clipboard", "复制 key 到剪贴板");
+                    if (copyContent != null && copyContent.image != null)
                     {
-                        EditorGUIUtility.systemCopyBuffer = key;
-                        LocalizationLog.Info($"已复制 key: {key}");
+                        if (GUILayout.Button(copyContent, EditorStyles.miniButton, GUILayout.Width(26)))
+                        {
+                            EditorGUIUtility.systemCopyBuffer = key;
+                            LocalizationLog.Info($"已复制 key: {key}");
+                        }
+                    }
+                    else
+                    {
+                        // 图标加载失败回退文字
+                        if (GUILayout.Button(new GUIContent("CP", "复制 key 到剪贴板"), EditorStyles.miniButton, GUILayout.Width(26)))
+                        {
+                            EditorGUIUtility.systemCopyBuffer = key;
+                            LocalizationLog.Info($"已复制 key: {key}");
+                        }
                     }
                 }
 
@@ -400,7 +414,7 @@ namespace CLocalization.Editor
             GUI.backgroundColor = oldBg;
         }
 
-        /// <summary>绘制单个语言单元格：空值高亮，多行可编辑。</summary>
+        /// <summary>绘制单个语言单元格：单行快速编辑 + 展开按钮弹窗编辑长文本。</summary>
         private void DrawLocaleCell(string key, LocaleData locale)
         {
             string current = "";
@@ -409,17 +423,28 @@ namespace CLocalization.Editor
             Color oldBg = GUI.backgroundColor;
             if (string.IsNullOrEmpty(current)) GUI.backgroundColor = new Color(1f, 0.95f, 0.6f);
 
-            // 多行文本编辑：检测是否含换行符，含则用 TextArea，否则用 TextField（节省垂直空间）
             // 列宽按该语言独立取（拖拽时只影响对应列）
             float colWidth = GetLangColumnWidth(locale.Meta?.Code ?? "?");
-            string newVal;
-            if (current.Contains("\n") || current.Length > 60)
+            string langCode = locale.Meta?.Code ?? "?";
+            string newVal = current;
+
+            using (new EditorGUILayout.HorizontalScope(GUILayout.Width(colWidth)))
             {
-                newVal = EditorGUILayout.TextArea(current, GUILayout.Width(colWidth), GUILayout.MinHeight(40));
-            }
-            else
-            {
-                newVal = EditorGUILayout.TextField(current, GUILayout.Width(colWidth));
+                // 单行 TextField：快速编辑短文本，长文本横向滚动（不再挤压成多行）
+                newVal = EditorGUILayout.TextField(current, GUILayout.Width(colWidth - 30));
+                // 展开按钮：点击弹出大文本框弹窗，便于编辑长文本/多行翻译
+                // 用 "..." 纯 ASCII 文字（Unicode 图标字符在不同字体下可能显示为方块）
+                var expandContent = new GUIContent("...", "展开编辑（大文本框，支持多行）");
+                if (GUILayout.Button(expandContent, EditorStyles.miniButton, GUILayout.Width(26)))
+                {
+                    // 弹窗编辑：实时回写，关闭后数据已在内存
+                    TranslationEditPopup.Edit(key, langCode, current, newText =>
+                    {
+                        if (locale.Entries == null) locale.Entries = new Dictionary<string, string>();
+                        locale.Entries[key] = newText;
+                        _window?.MarkDirty();
+                    });
+                }
             }
             GUI.backgroundColor = oldBg;
 
