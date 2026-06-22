@@ -37,3 +37,6 @@ MonoBehaviour:
   assetLoadMode: 0
   localesPath: CLocalization/Locales
   assetsPath: CLocalization/Assets
+  spriteMap: {fileID: 11400000, guid: 150971ca166a22b46b067121646fec35, type: 2}
+  audioMap: {fileID: 11400000, guid: b5ca560bb5c8c64448953fde5a484ebf, type: 2}
+  fontMap: {fileID: 11400000, guid: bbbca71458a155646bd645bcd4459239, type: 2}

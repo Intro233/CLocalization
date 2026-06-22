@@ -6,6 +6,32 @@
 
 ---
 
+## [2.3.0] - 2026-06-18
+
+资源本地化可视化配置（映射表）。**重大改进：废弃目录约定，改用映射表配置。**
+
+### 新增
+- **资源映射表**：`SpriteAssetMap` / `AudioClipAssetMap` / `FontAssetMap`（三张 ScriptableObject，按资源类型分离），存储 key × 语言 → 资源引用。
+- **「资源」Tab**：编辑窗口新增资源 Tab，可视化配置各语言资源：类型切换（Sprite/Audio/Font）、key 列表（搜索/增删）、右侧按语言拖入资源。自动保存到映射表。
+- **资源查询改走映射表**：`Localization.GetAsset<T>` 按 T 类型从对应映射表查询当前语言资源（原 `Resources.Load` 目录约定废弃）。
+- **Inspector 状态提示**：Localize 组件 Inspector 显示该 key 的映射状态（已配置语言数），提示去「资源」Tab 编辑。
+- `LocalizationSetup.LoadOrCreateAssetMaps`：首次打开资源 Tab 自动创建三张映射表到 `Resources/CLocalization/AssetMaps/`。
+
+### 废弃
+- **目录约定加载方式**：旧版本按 `Resources/{assetsPath}/{语言}/{key}` 自动加载资源，现废弃。Loader 的 `LoadAsset`/`LoadAssetAsync` 保留接口但返回 null（资源查询由映射表接管）。
+- `LocalizationEditorData.GetAssetsHintMessage` 改为提示去资源 Tab 配置（不再提示目录约定）。
+
+### 不变项
+- **组件零改动**：LocalizeSprite/AudioSource/Font 仍调 `Localization.GetAsset<T>(key)`，内部实现变更对调用方透明。
+- **文本本地化**：完全不受影响（走 LocaleData JSON）。
+- **ILocalizationLoader 接口**：LoadAsset 保留（返回 null），自定义 Loader 不受影响。
+
+### 已知边界
+- 映射表是 ScriptableObject（Resources），打包后不可热更新。需热更新资源需另行实现自定义 Loader。
+- 映射表 Lookup 线性查找（条目通常几十到几百，可接受）。
+
+---
+
 ## [2.2.5] - 2026-06-18
 
 诊断检测性能优化：进度条 + 结果缓存。

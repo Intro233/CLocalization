@@ -79,12 +79,14 @@ namespace CLocalization
         /// <summary>
         /// 加载指定语言、指定 key 的本地化资源。不做缓存（资源通常由调用方持有引用）。
         /// </summary>
+        /// <summary>
+        /// 加载本地化资源。已废弃路径约定加载——资源现由 <see cref="Localization.GetAsset{T}"/> 查询映射表。
+        /// 保留方法（满足接口契约），始终返回 null。
+        /// </summary>
         public T LoadAsset<T>(string key, string languageCode) where T : Object
         {
-            if (string.IsNullOrEmpty(languageCode) || string.IsNullOrEmpty(key)) return null;
-
-            string path = GetAssetPath(languageCode, key);
-            return Resources.Load<T>(path);
+            // 资源查询已迁移到 Localization.LookupAsset（查 SpriteAssetMap/AudioClipAssetMap/FontAssetMap）
+            return null;
         }
 
         /// <summary>
@@ -130,11 +132,11 @@ namespace CLocalization
         }
 
         /// <summary>
-        /// 【异步】加载本地化资源。Resources 加载是同步瞬时操作，直接包装同步结果。
+        /// 【异步】加载本地化资源。已废弃——资源由映射表查询（见 LoadAsset 注释）。始终返回 null。
         /// </summary>
         public UniTask<T> LoadAssetAsync<T>(string key, string languageCode) where T : Object
         {
-            return UniTask.FromResult(LoadAsset<T>(key, languageCode));
+            return UniTask.FromResult<T>(null);
         }
 
         /// <summary>清空已缓存的语言文本（切换 Loader 或热更新数据后调用）。</summary>

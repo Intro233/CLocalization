@@ -53,6 +53,19 @@ namespace CLocalization
         [Tooltip("本地化资源（Sprite/Audio/Font）子路径，如 CLocalization/Assets。仅 Resources 模式支持")]
         [SerializeField] private string assetsPath = "CLocalization/Assets";
 
+        [Header("资源映射表")]
+        /// <summary>Sprite 资源映射表（key × 语言 → Sprite）。</summary>
+        [Tooltip("Sprite 资源映射表，在「资源」Tab 配置")]
+        [SerializeField] private SpriteAssetMap spriteMap;
+
+        /// <summary>AudioClip 资源映射表（key × 语言 → AudioClip）。</summary>
+        [Tooltip("AudioClip 资源映射表，在「资源」Tab 配置")]
+        [SerializeField] private AudioClipAssetMap audioMap;
+
+        /// <summary>字体资源映射表（key × 语言 → TMP_FontAsset/Font）。</summary>
+        [Tooltip("字体资源映射表，在「资源」Tab 配置")]
+        [SerializeField] private FontAssetMap fontMap;
+
         // ---------- 运行时访问器 ----------
 
         /// <summary>可用语言列表（只读视图）。</summary>
@@ -81,6 +94,13 @@ namespace CLocalization
 
         /// <summary>本地化资源子路径。</summary>
         public string AssetsPath => string.IsNullOrEmpty(assetsPath) ? "CLocalization/Assets" : assetsPath;
+
+        /// <summary>Sprite 资源映射表。</summary>
+        public SpriteAssetMap SpriteMap => spriteMap;
+        /// <summary>AudioClip 资源映射表。</summary>
+        public AudioClipAssetMap AudioMap => audioMap;
+        /// <summary>字体资源映射表。</summary>
+        public FontAssetMap FontMap => fontMap;
 
         /// <summary>根据语言代码查找 LanguageInfo，找不到返回 null。</summary>
         public LanguageInfo FindLanguage(string code)

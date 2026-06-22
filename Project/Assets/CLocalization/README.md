@@ -229,20 +229,34 @@ public class AddressablesLoader : ILocalizationLoader
 
 ---
 
-## 📂 资源本地化目录约定
+## 🖼️ 资源本地化配置（映射表）
 
-本地化资源（Sprite/Audio/Font）按以下结构放置（Resources 模式，路径可在 Settings 的 `AssetsPath` 配置）：
+Sprite/AudioClip/Font 等资源通过**资源映射表**配置，不再依赖目录约定。
 
+### 配置方式
+
+1. 打开 `Tools > CLocalization > Localization Window` → 切到**「资源」Tab**
+2. 顶部切换资源类型：`Sprite` / `AudioClip` / `Font`
+3. 左侧点「+」输入 key 新增映射（如 `ui/logo`），或选择已有 key
+4. 右侧为每个语言拖入对应资源（Sprite/AudioClip/TMP_FontAsset/Font）
+5. 自动保存到映射表 ScriptableObject（`Resources/CLocalization/AssetMaps/`）
+
+### 工作原理
+
+- 三张映射表：`SpriteAssetMap` / `AudioClipAssetMap` / `FontAssetMap`（按类型分离）
+- 组件（`LocalizeSprite`/`LocalizeAudioSource`/`LocalizeFont`）只配 key，运行时 `Localization.GetAsset<T>(key)` 按当前语言从映射表查资源
+- 切换语言时自动重新查询并刷新
+
+```csharp
+// 运行时获取资源（自动按当前语言查映射表）
+Sprite logo = Localization.GetAsset<Sprite>("ui/logo");
 ```
-Resources/{assetsPath}/
-├── zh-CN/
-│   └── ui/logo          ← key 为 ui/logo 的中文版 Sprite/...
-├── en-US/
-│   └── ui/logo
-└── ...
-```
 
-> 注意：Sprite/Audio/Font 等 Unity 资源仅在 **Resources** 模式下支持加载；StreamingAssets 模式仅支持文本本地化。
+### Inspector 状态提示
+
+Localize 组件的 Inspector 会显示该 key 的映射状态（如「3/4 语言已配置」），并提示去「资源」Tab 编辑。
+
+> 旧版本曾用「按目录放文件」的路径约定加载资源，现已废弃，统一改用映射表。资源映射表是 ScriptableObject（打包后不可热更新，需重新打 AssetBundle）。
 
 ---
 

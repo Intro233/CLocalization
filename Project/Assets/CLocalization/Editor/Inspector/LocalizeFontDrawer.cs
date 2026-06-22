@@ -34,7 +34,14 @@ namespace CLocalization.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("refreshOnEnable"), true);
 
             EditorGUILayout.Space(4);
-            EditorGUILayout.HelpBox("字体资源位置（TMP 用 TMP_FontAsset，传统 Text 用 Font，自动选择类型）：\n" + LocalizationEditorData.GetAssetsHintMessage(), MessageType.Info);
+            var settings = LocalizationSetup.LoadOrCreateSettings();
+            // 字体用 fontKey（优先），回退到 localizationKey
+            string fontKey = serializedObject.FindProperty("fontKey").stringValue;
+            string locKey = serializedObject.FindProperty("localizationKey").stringValue;
+            string key = !string.IsNullOrEmpty(fontKey) ? fontKey : locKey;
+            EditorGUILayout.HelpBox(
+                "字体资源映射（TMP 用 TMP_FontAsset，传统 Text 用 Font）：\n" + LocalizationEditorData.GetAssetsHintMessage(key, settings?.FontMap),
+                MessageType.Info);
 
             serializedObject.ApplyModifiedProperties();
         }

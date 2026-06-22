@@ -26,11 +26,12 @@ namespace CLocalization.Editor
         /// <summary>各 Tab 的绘制器。</summary>
         private KeysTab _keysTab;
         private LanguagesTab _languagesTab;
+        private AssetsTab _assetsTab;
         private ImportExportTab _importExportTab;
         private DiagnosticsTab _diagnosticsTab;
 
         /// <summary>Tab 名称。</summary>
-        private static readonly string[] TabNames = { "词条", "语言", "导入/导出", "诊断" };
+        private static readonly string[] TabNames = { "词条", "语言", "资源", "导入/导出", "诊断" };
 
         [MenuItem("Tools/CLocalization/Localization Window", priority = 1)]
         public static void Open()
@@ -51,6 +52,7 @@ namespace CLocalization.Editor
         {
             _keysTab = new KeysTab();
             _languagesTab = new LanguagesTab();
+            _assetsTab = new AssetsTab();
             _importExportTab = new ImportExportTab();
             _diagnosticsTab = new DiagnosticsTab();
         }
@@ -139,9 +141,12 @@ namespace CLocalization.Editor
                     _languagesTab.Draw(this, _locales);
                     break;
                 case 2:
-                    _importExportTab.Draw(this, _locales);
+                    _assetsTab.Draw(this, _locales);
                     break;
                 case 3:
+                    _importExportTab.Draw(this, _locales);
+                    break;
+                case 4:
                     _diagnosticsTab.Draw(this, _locales);
                     break;
             }

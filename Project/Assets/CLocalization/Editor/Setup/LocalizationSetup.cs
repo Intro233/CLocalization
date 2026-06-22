@@ -64,6 +64,82 @@ namespace CLocalization.Editor
             return settings;
         }
 
+        /// <summary>资源映射表存放目录（相对 Assets）。</summary>
+        public const string AssetMapsPath = "Assets/CLocalization/Resources/CLocalization/AssetMaps";
+
+        /// <summary>
+        /// 确保 Settings 的三张资源映射表存在（为 null 则创建并赋值）。
+        /// 首次打开资源 Tab 时调用。
+        /// </summary>
+        /// <returns>是否有新建（需要保存）。</returns>
+        public static bool LoadOrCreateAssetMaps()
+        {
+            var settings = LoadOrCreateSettings();
+            if (settings == null) return false;
+
+            bool created = false;
+            EnsureMap<SpriteAssetMap>(settings, "SpriteAssetMap", so => SetMapField(so, "spriteMap"), ref created);
+            EnsureMap<AudioClipAssetMap>(settings, "AudioClipAssetMap", so => SetMapField(so, "audioMap"), ref created);
+            EnsureMap<FontAssetMap>(settings, "FontAssetMap", so => SetMapField(so, "fontMap"), ref created);
+
+            if (created)
+            {
+                EditorUtility.SetDirty(settings);
+                AssetDatabase.SaveAssets();
+            }
+            return created;
+        }
+
+        /// <summary>检查并创建单张映射表（若 Settings 对应字段为 null）。</summary>
+        private static void EnsureMap<T>(LocalizationSettings settings, string fileName,
+            System.Action<SerializedObject> assignField, ref bool created) where T : AssetMapBase
+        {
+            // 通过 SerializedObject 读取字段判断是否为 null
+            var so = new SerializedObject(settings);
+            // 需要知道字段名，但泛型无法直接取。改为反射检查三个属性
+            T existing = null;
+            if (typeof(T) == typeof(SpriteAssetMap)) existing = settings.SpriteMap as T;
+            else if (typeof(T) == typeof(AudioClipAssetMap)) existing = settings.AudioMap as T;
+            else if (typeof(T) == typeof(FontAssetMap)) existing = settings.FontMap as T;
+
+            if (existing != null) return;
+
+            // 创建资源
+            if (!AssetDatabase.IsValidFolder(AssetMapsPath))
+            {
+                System.IO.Directory.CreateDirectory(AssetMapsPath);
+                AssetDatabase.Refresh();
+            }
+            string assetPath = AssetMapsPath + "/" + fileName + ".asset";
+            var map = AssetDatabase.LoadAssetAtPath<T>(assetPath);
+            if (map == null)
+            {
+                map = ScriptableObject.CreateInstance<T>();
+                AssetDatabase.CreateAsset(map, assetPath);
+            }
+
+            // 赋值给 Settings 对应字段
+            assignField(so);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            created = true;
+        }
+
+        /// <summary>给 Settings 的指定 map 字段赋值为「当前已加载的同路径资源」。</summary>
+        private static void SetMapField(SerializedObject so, string fieldName)
+        {
+            var prop = so.FindProperty(fieldName);
+            if (prop == null) return;
+            // 根据字段名决定加载类型与路径
+            string assetPath = AssetMapsPath + "/";
+            System.Type type = null;
+            if (fieldName == "spriteMap") { assetPath += "SpriteAssetMap.asset"; type = typeof(SpriteAssetMap); }
+            else if (fieldName == "audioMap") { assetPath += "AudioClipAssetMap.asset"; type = typeof(AudioClipAssetMap); }
+            else if (fieldName == "fontMap") { assetPath += "FontAssetMap.asset"; type = typeof(FontAssetMap); }
+            else return;
+            var map = AssetDatabase.LoadAssetAtPath(assetPath, type);
+            if (map != null) prop.objectReferenceValue = map;
+        }
+
         /// <summary>
         /// 根据磁盘上实际存在的 locale 文件，把 Settings 的语言列表与文件保持同步（merge 策略）。
         /// - 文件存在但 Settings 没有的语言 → 新增到 Settings；

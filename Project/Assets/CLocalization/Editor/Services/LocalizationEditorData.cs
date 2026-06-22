@@ -71,17 +71,24 @@ namespace CLocalization.Editor
         /// Resources 模式：Resources/{assetsPath}/{语言}/{key}
         /// StreamingAssets 模式：提示不支持 Unity 资源。
         /// </summary>
-        public static string GetAssetsHintMessage()
+        /// <summary>
+        /// 获取资源映射配置提示文案（提示去「资源」Tab 配置，并显示某 key 的已配置状态）。
+        /// </summary>
+        /// <param name="key">当前 key（用于查询映射状态，可空）</param>
+        /// <param name="map">对应类型的映射表（可为空）</param>
+        public static string GetAssetsHintMessage(string key = null, AssetMapBase map = null)
         {
-            var settings = LocalizationSetup.LoadOrCreateSettings();
-            if (settings != null && settings.AssetLoadMode == AssetLoadMode.StreamingAssets)
+            string baseHint = "本地化资源在「Tools > CLocalization > Localization Window」的「资源」Tab 配置：\n" +
+                              "为每个 key 在各语言拖入对应的 Sprite/AudioClip/Font 即可，切换语言时自动加载。";
+            if (!string.IsNullOrEmpty(key) && map != null)
             {
-                return "⚠ 当前为 StreamingAssets 模式，不支持加载 Unity 资源（Sprite/Audio/Font）。\n" +
-                       "如需本地化资源，请在 Project Settings > CLocalization 切换为 Resources 模式。";
+                int configured = map.CountConfiguredLanguages(key);
+                var settings = LocalizationSetup.LoadOrCreateSettings();
+                int total = settings?.Languages?.Count ?? 0;
+                return baseHint + $"\n\n当前 key \"{key}\" 映射状态：{configured}/{total} 语言已配置。" +
+                       (configured == 0 ? "（尚未配置，运行时不会显示资源）" : "");
             }
-            string assetsPath = settings != null ? settings.AssetsPath : "CLocalization/Assets";
-            return $"资源需放在：Resources/{assetsPath}/{{语言代码}}/{{key}}\n" +
-                   "切换语言时自动加载对应资源。";
+            return baseHint;
         }
 
         /// <summary>Settings 资源相对路径（相对 Assets）。</summary>

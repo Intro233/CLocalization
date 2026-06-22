@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 0}
+  m_Name: FontAssetMap
+  m_EditorClassIdentifier: CLocalization.Runtime:CLocalization:FontAssetMap
+  entries:
+  - key: 111
+    languageCode: zh-CN
+    asset: {fileID: 0}
+  - key: 111
+    languageCode: en-US
+    asset: {fileID: 0}
+  - key: 111
+    languageCode: ja-JP
+    asset: {fileID: 0}
+  - key: 111
+    languageCode: ko-KR
+    asset: {fileID: 0}

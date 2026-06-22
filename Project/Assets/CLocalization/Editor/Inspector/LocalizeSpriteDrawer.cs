@@ -22,9 +22,13 @@ namespace CLocalization.Editor
             EditorGUILayout.Space(4);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("refreshOnEnable"), true);
 
-            // 提示资源目录约定（按当前加载模式动态显示）
+            // 资源映射状态提示（按当前 key 显示配置状态）
             EditorGUILayout.Space(4);
-            EditorGUILayout.HelpBox("Sprite 资源位置：\n" + LocalizationEditorData.GetAssetsHintMessage(), MessageType.Info);
+            var settings = LocalizationSetup.LoadOrCreateSettings();
+            string key = keyProp.stringValue;
+            EditorGUILayout.HelpBox(
+                "Sprite 资源映射：\n" + LocalizationEditorData.GetAssetsHintMessage(key, settings?.SpriteMap),
+                MessageType.Info);
 
             serializedObject.ApplyModifiedProperties();
         }

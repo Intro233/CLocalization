@@ -362,15 +362,38 @@ namespace CLocalization
 
         /// <summary>
         /// 加载当前语言下某 key 对应的本地化资源（Sprite/AudioClip/Font 等）。
-        /// 找不到返回 null。资源加载不做回退（资源通常需精确匹配语言）。
+        /// 按 T 类型从对应的资源映射表查询（SpriteAssetMap/AudioClipAssetMap/FontAssetMap）。
+        /// 找不到返回 null。资源不做语言回退（通常需精确匹配）。
         /// </summary>
         public static T GetAsset<T>(string key) where T : Object
         {
-            if (!IsInitialized || _loader == null || string.IsNullOrEmpty(_currentCode))
+            if (!IsInitialized || _settings == null || string.IsNullOrEmpty(_currentCode) || string.IsNullOrEmpty(key))
             {
                 return null;
             }
-            return _loader.LoadAsset<T>(key, _currentCode);
+            return LookupAsset<T>(key);
+        }
+
+        /// <summary>按类型从对应映射表查询当前语言的资源。</summary>
+        private static T LookupAsset<T>(string key) where T : Object
+        {
+            System.Type t = typeof(T);
+            Object asset = null;
+
+            if (t == typeof(Sprite))
+            {
+                asset = _settings.SpriteMap?.Lookup(key, _currentCode);
+            }
+            else if (t == typeof(AudioClip))
+            {
+                asset = _settings.AudioMap?.Lookup(key, _currentCode);
+            }
+            else if (t == typeof(TMPro.TMP_FontAsset) || t == typeof(Font))
+            {
+                asset = _settings.FontMap?.Lookup(key, _currentCode);
+            }
+
+            return asset as T;
         }
 
         // ---------- 语言切换 ----------
