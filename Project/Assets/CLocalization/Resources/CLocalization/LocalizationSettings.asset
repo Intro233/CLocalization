@@ -15,20 +15,52 @@ MonoBehaviour:
   languages:
   - languageCode: zh-CN
     displayName: "\u4E2D\u6587"
-    flag: {fileID: 0}
     isRightToLeft: 0
+    tmpFontPath: 
+    tmpFontPathType: 0
+    fallbackFontPath: 
+    fallbackFontPathType: 0
+    flagPath: 
+    flagPathType: 0
+    tmpFont: {fileID: 0}
+    fallbackFont: {fileID: 0}
+    flag: {fileID: 0}
   - languageCode: en-US
     displayName: English
-    flag: {fileID: 0}
     isRightToLeft: 0
+    tmpFontPath: 
+    tmpFontPathType: 0
+    fallbackFontPath: 
+    fallbackFontPathType: 0
+    flagPath: 
+    flagPathType: 0
+    tmpFont: {fileID: 0}
+    fallbackFont: {fileID: 0}
+    flag: {fileID: 0}
   - languageCode: ja-JP
     displayName: "\u65E5\u672C\u8A9E"
-    flag: {fileID: 0}
     isRightToLeft: 0
+    tmpFontPath: 
+    tmpFontPathType: 0
+    fallbackFontPath: 
+    fallbackFontPathType: 0
+    flagPath: 
+    flagPathType: 0
+    tmpFont: {fileID: 0}
+    fallbackFont: {fileID: 0}
+    flag: {fileID: 0}
   - languageCode: ko-KR
     displayName: "\uD55C\uAD6D\uC5B4"
-    flag: {fileID: 0}
     isRightToLeft: 0
+    tmpFontPath: 
+    tmpFontPathType: 0
+    fallbackFontPath: 
+    fallbackFontPathType: 0
+    flagPath: 
+    flagPathType: 0
+    tmpFont: {fileID: 0}
+    fallbackFont: {fileID: 0}
+    flag: {fileID: 0}
   defaultLanguageCode: zh-CN
   persistLanguageChoice: 1
   useSystemLanguageByDefault: 1

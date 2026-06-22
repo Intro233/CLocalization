@@ -39,6 +39,14 @@ namespace CLocalization.Editor
             _window = window;
             // 确保三张映射表已创建
             LocalizationSetup.LoadOrCreateAssetMaps();
+            // 旧数据迁移：asset 强引用 → assetPath（仅首次检测，迁移后不再触发）
+            var settings = LocalizationSetup.LoadOrCreateSettings();
+            if (settings != null)
+            {
+                MigrateLegacyAssetRefs(settings.SpriteMap);
+                MigrateLegacyAssetRefs(settings.AudioMap);
+                MigrateLegacyAssetRefs(settings.FontMap);
+            }
 
             // 顶部：资源类型切换
             _currentType = GUILayout.Toolbar(_currentType, TypeNames, GUILayout.Height(24));
@@ -188,24 +196,38 @@ namespace CLocalization.Editor
 
                         var element = entries.GetArrayElementAtIndex(entryIdx);
                         var assetProp = element.FindPropertyRelative("asset");
+                        var assetPathProp = element.FindPropertyRelative("assetPath");
+                        var pathTypeProp = element.FindPropertyRelative("pathType");
 
                         using (new EditorGUILayout.HorizontalScope())
                         {
                             EditorGUILayout.LabelField(code, GUILayout.Width(80));
-                            var newAsset = EditorGUILayout.ObjectField(assetProp.objectReferenceValue, assetType, false);
-                            if (newAsset != assetProp.objectReferenceValue)
+
+                            // ObjectField 拖拽：显示当前预览引用（用 asset 字段）
+                            var currentPreview = assetProp != null ? assetProp.objectReferenceValue : null;
+                            var newAsset = EditorGUILayout.ObjectField(currentPreview, assetType, false);
+                            if (newAsset != currentPreview)
                             {
-                                assetProp.objectReferenceValue = newAsset;
+                                // 拖入/替换资源：存路径 + 回填预览
+                                if (newAsset != null)
+                                {
+                                    string fullPath = AssetDatabase.GetAssetPath(newAsset);
+                                    var (storedPath, pType) = ConvertToStoredPath(fullPath);
+                                    if (assetPathProp != null) assetPathProp.stringValue = storedPath;
+                                    if (pathTypeProp != null) pathTypeProp.enumValueIndex = (int)pType;
+                                    if (assetProp != null) assetProp.objectReferenceValue = newAsset;
+                                }
+                                else
+                                {
+                                    // 清空
+                                    if (assetPathProp != null) assetPathProp.stringValue = "";
+                                    if (assetProp != null) assetProp.objectReferenceValue = null;
+                                }
                             }
-                            // 配置状态标记
-                            if (assetProp.objectReferenceValue == null)
-                            {
-                                GUILayout.Label("未配置", EditorStyles.miniLabel, GUILayout.Width(50));
-                            }
-                            else
-                            {
-                                GUILayout.Label("✓", EditorStyles.miniLabel, GUILayout.Width(50));
-                            }
+
+                            // 配置状态标记（基于路径是否非空）
+                            bool configured = assetPathProp != null && !string.IsNullOrEmpty(assetPathProp.stringValue);
+                            GUILayout.Label(configured ? "✓" : "未配置", EditorStyles.miniLabel, GUILayout.Width(50));
                         }
                     }
 
@@ -265,6 +287,54 @@ namespace CLocalization.Editor
                 if (entries[i].key == key && entries[i].languageCode == code) return i;
             }
             return -1;
+        }
+
+        /// <summary>
+        /// 将完整工程路径转换为存储路径 + 路径类型。
+        /// 若路径含 /Resources/，截取为 Resources 相对路径（去扩展名）+ type=Resources；
+        /// 否则存完整路径 + type=FullPath。
+        /// </summary>
+        public static (string path, AssetPathType type) ConvertToStoredPath(string fullPath)
+        {
+            if (string.IsNullOrEmpty(fullPath)) return ("", AssetPathType.Resources);
+
+            // 检查是否在 Resources 目录下
+            int resIdx = fullPath.IndexOf("/Resources/", System.StringComparison.OrdinalIgnoreCase);
+            if (resIdx >= 0)
+            {
+                // 截取 Resources/ 之后的部分，去掉扩展名
+                string afterResources = fullPath.Substring(resIdx + "/Resources/".Length);
+                string withoutExt = System.IO.Path.ChangeExtension(afterResources, null);
+                return (withoutExt, AssetPathType.Resources);
+            }
+
+            // 不在 Resources 下：存完整工程路径
+            return (fullPath, AssetPathType.FullPath);
+        }
+
+        /// <summary>检测并迁移旧数据（asset 强引用 → assetPath）。首次打开资源 Tab 时调用。</summary>
+        private static void MigrateLegacyAssetRefs(AssetMapBase map)
+        {
+            if (map == null) return;
+            bool changed = false;
+            foreach (var entry in map.Entries)
+            {
+                // asset 有值但 assetPath 为空 → 迁移
+                if (entry.Asset != null && string.IsNullOrEmpty(entry.assetPath))
+                {
+                    string fullPath = AssetDatabase.GetAssetPath(entry.Asset);
+                    var (storedPath, pType) = ConvertToStoredPath(fullPath);
+                    entry.assetPath = storedPath;
+                    entry.pathType = pType;
+                    changed = true;
+                }
+            }
+            if (changed)
+            {
+                EditorUtility.SetDirty(map);
+                AssetDatabase.SaveAssets();
+                LocalizationLog.Info($"已迁移 {map.name} 的旧强引用为路径存储。");
+            }
         }
 
         /// <summary>保存映射表（SetDirty + SaveAssets）。</summary>

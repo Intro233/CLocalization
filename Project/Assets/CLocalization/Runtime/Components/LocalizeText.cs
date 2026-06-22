@@ -95,7 +95,7 @@ namespace CLocalization
         /// <summary>把文本写入目标组件（TMP 优先），并根据当前语言应用 RTL 与全局字体。</summary>
         private void ApplyToTarget(string text)
         {
-            // 读取当前语言信息（RTL 标志 + 全局字体配置）
+            // 读取当前语言信息（RTL 标志 + 全局字体路径配置）
             LanguageInfo lang = Localization.CurrentLanguage;
             bool isRtl = Localization.IsInitialized && lang != null && lang.IsRightToLeft;
 
@@ -103,19 +103,21 @@ namespace CLocalization
             {
                 // TMP 原生支持 RTL 文本方向
                 tmpText.isRightToLeftText = isRtl;
-                // 应用全局字体（LanguageInfo 配置的，为 null 则保持组件原有字体）
-                if (lang != null && lang.TmpFont != null)
+                // 应用全局字体（从 LanguageInfo 路径加载，未配置则保持原字体）
+                if (lang != null && lang.HasTmpFont)
                 {
-                    tmpText.font = lang.TmpFont;
+                    var font = Localization.LoadAssetByPath<TMP_FontAsset>(lang.TmpFontPath, lang.TmpFontPathType);
+                    if (font != null) tmpText.font = font;
                 }
                 tmpText.text = text;
             }
             else if (uiText != null)
             {
-                // 传统 UI.Text 的全局字体（为 null 保持原字体）
-                if (lang != null && lang.FallbackFont != null)
+                // 传统 UI.Text 全局字体（路径加载，未配置保持原字体）
+                if (lang != null && lang.HasFallbackFont)
                 {
-                    uiText.font = lang.FallbackFont;
+                    var font = Localization.LoadAssetByPath<Font>(lang.FallbackFontPath, lang.FallbackFontPathType);
+                    if (font != null) uiText.font = font;
                 }
                 // 传统 UI.Text 无原生 RTL 支持，仅做文本设置；
                 // 完整 RTL（含 bidi 文本整形）需调用方自行处理，或使用 TMP。

@@ -39,6 +39,9 @@ namespace CLocalization
         /// <summary>语言切换请求序号（单调递增）。用于异步切换时取消过期请求，避免竞态。</summary>
         private static long _applyEpoch;
 
+        /// <summary>资源路径→已加载资源的缓存（避免重复 Resources.Load）。key = path，value = Object。</summary>
+        private static readonly Dictionary<string, Object> _assetCache = new Dictionary<string, Object>();
+
         // ---------- 事件 ----------
 
         /// <summary>语言切换事件。Localize 组件订阅此事件以自动刷新显示。</summary>
@@ -374,26 +377,57 @@ namespace CLocalization
             return LookupAsset<T>(key);
         }
 
-        /// <summary>按类型从对应映射表查询当前语言的资源。</summary>
+        /// <summary>按类型从对应映射表查询当前语言资源路径，再通过 Loader 加载（带缓存）。</summary>
         private static T LookupAsset<T>(string key) where T : Object
         {
             System.Type t = typeof(T);
-            Object asset = null;
+            AssetMapBase map = null;
 
             if (t == typeof(Sprite))
             {
-                asset = _settings.SpriteMap?.Lookup(key, _currentCode);
+                map = _settings.SpriteMap;
             }
             else if (t == typeof(AudioClip))
             {
-                asset = _settings.AudioMap?.Lookup(key, _currentCode);
+                map = _settings.AudioMap;
             }
             else if (t == typeof(TMPro.TMP_FontAsset) || t == typeof(Font))
             {
-                asset = _settings.FontMap?.Lookup(key, _currentCode);
+                map = _settings.FontMap;
             }
 
-            return asset as T;
+            if (map == null) return null;
+
+            // 1. 从映射表查路径
+            if (!map.LookupPath(key, _currentCode, out var path, out var pathType))
+            {
+                return null;
+            }
+
+            // 2. 通过 Loader 加载（LoadAssetByPath 内部带缓存）
+            return LoadAssetByPath<T>(path, pathType);
+        }
+
+        /// <summary>清除资源缓存（热更新资源后调用，强制重新加载）。</summary>
+        public static void ClearAssetCache()
+        {
+            _assetCache.Clear();
+        }
+
+        /// <summary>
+        /// 按资源路径加载资源（带缓存，供 LanguageInfo 字体/国旗等全局配置使用）。
+        /// </summary>
+        public static T LoadAssetByPath<T>(string path, AssetPathType pathType) where T : Object
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+            string cacheKey = pathType + ":" + path;
+            if (_assetCache.TryGetValue(cacheKey, out var cached))
+            {
+                return cached as T;
+            }
+            T asset = _loader.LoadAssetByPath<T>(path, pathType);
+            if (asset != null) _assetCache[cacheKey] = asset;
+            return asset;
         }
 
         // ---------- 语言切换 ----------

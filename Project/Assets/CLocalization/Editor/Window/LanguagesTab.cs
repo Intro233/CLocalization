@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using TMPro;
 using UnityEditor;
 using UnityEngine;
 
@@ -141,25 +142,25 @@ namespace CLocalization.Editor
                 return;
             }
 
-            // 缩进绘制字体字段
+            // 缩进绘制字体字段（路径存储 + ObjectField 预览）
             using (new EditorGUI.IndentLevelScope())
             using (new EditorGUILayout.VerticalScope(GUI.skin.box))
             {
                 EditorGUILayout.LabelField($"全局字体配置 — {code}", EditorStyles.miniBoldLabel);
 
-                var tmpFontProp = langProp.FindPropertyRelative("tmpFont");
-                var fallbackFontProp = langProp.FindPropertyRelative("fallbackFont");
+                // 旧数据迁移：tmpFont 强引用 → tmpFontPath
+                MigrateLegacyFont(langProp, "tmpFont", "tmpFontPath", "tmpFontPathType");
+                MigrateLegacyFont(langProp, "fallbackFont", "fallbackFontPath", "fallbackFontPathType");
 
-                if (tmpFontProp != null)
-                {
-                    EditorGUILayout.PropertyField(tmpFontProp, new GUIContent("TMP 字体"), true);
-                }
-                if (fallbackFontProp != null)
-                {
-                    EditorGUILayout.PropertyField(fallbackFontProp, new GUIContent("传统 Font"), true);
-                }
+                // TMP 字体（ObjectField 预览 + 存路径）
+                DrawPathObjectField(langProp, "tmpFont", "tmpFontPath", "tmpFontPathType",
+                    "TMP 字体", typeof(TMP_FontAsset));
 
-                EditorGUILayout.HelpBox("留空则保持文本组件原有字体。切换到该语言时，所有 LocalizeText 自动应用此字体。",
+                // 传统 Font
+                DrawPathObjectField(langProp, "fallbackFont", "fallbackFontPath", "fallbackFontPathType",
+                    "传统 Font", typeof(Font));
+
+                EditorGUILayout.HelpBox("留空则保持文本组件原有字体。切换到该语言时，所有 LocalizeText 自动应用此字体。\n资源可在工程任意位置（在 Resources 下可运行时加载，其他位置需自定义 Loader/AB）。",
                     MessageType.Info);
             }
 
@@ -167,6 +168,60 @@ namespace CLocalization.Editor
             {
                 EditorUtility.SetDirty(settings);
                 AssetDatabase.SaveAssets();
+            }
+        }
+
+        /// <summary>绘制路径存储的 ObjectField：拖拽资源时存路径，显示时用预览引用回填。</summary>
+        /// <param name="langProp">LanguageInfo 的 SerializedProperty</param>
+        /// <param name="previewField">预览强引用字段名（如 "tmpFont"）</param>
+        /// <param name="pathField">路径字段名（如 "tmpFontPath"）</param>
+        /// <param name="typeField">路径类型字段名</param>
+        /// <param name="label">显示标签</param>
+        /// <param name="assetType">ObjectField 约束的资源类型</param>
+        private void DrawPathObjectField(SerializedProperty langProp, string previewField,
+            string pathField, string typeField, string label, System.Type assetType)
+        {
+            var previewProp = langProp.FindPropertyRelative(previewField);
+            var pathProp = langProp.FindPropertyRelative(pathField);
+            var typeProp = langProp.FindPropertyRelative(typeField);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField(label, GUILayout.Width(80));
+                var currentPreview = previewProp != null ? previewProp.objectReferenceValue : null;
+                var newAsset = EditorGUILayout.ObjectField(currentPreview, assetType, false);
+                if (newAsset != currentPreview)
+                {
+                    if (newAsset != null)
+                    {
+                        string fullPath = AssetDatabase.GetAssetPath(newAsset);
+                        var (storedPath, pType) = AssetsTab.ConvertToStoredPath(fullPath);
+                        if (pathProp != null) pathProp.stringValue = storedPath;
+                        if (typeProp != null) typeProp.enumValueIndex = (int)pType;
+                        if (previewProp != null) previewProp.objectReferenceValue = newAsset;
+                    }
+                    else
+                    {
+                        if (pathProp != null) pathProp.stringValue = "";
+                        if (previewProp != null) previewProp.objectReferenceValue = null;
+                    }
+                }
+            }
+        }
+
+        /// <summary>旧数据迁移：强引用字段 → 路径字段（仅当强引用有值且路径为空时）。</summary>
+        private void MigrateLegacyFont(SerializedProperty langProp, string legacyField, string pathField, string typeField)
+        {
+            var legacyProp = langProp.FindPropertyRelative(legacyField);
+            var pathProp = langProp.FindPropertyRelative(pathField);
+            if (legacyProp == null || pathProp == null) return;
+            if (legacyProp.objectReferenceValue != null && string.IsNullOrEmpty(pathProp.stringValue))
+            {
+                string fullPath = AssetDatabase.GetAssetPath(legacyProp.objectReferenceValue);
+                var (storedPath, pType) = AssetsTab.ConvertToStoredPath(fullPath);
+                pathProp.stringValue = storedPath;
+                var typeProp = langProp.FindPropertyRelative(typeField);
+                if (typeProp != null) typeProp.enumValueIndex = (int)pType;
             }
         }
 

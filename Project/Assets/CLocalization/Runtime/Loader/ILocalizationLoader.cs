@@ -46,5 +46,20 @@ namespace CLocalization
         /// 【异步】加载指定语言、指定 key 的本地化资源。
         /// </summary>
         UniTask<T> LoadAssetAsync<T>(string key, string languageCode) where T : Object;
+
+        // ---------- 路径版资源加载（资源映射表方案） ----------
+
+        /// <summary>
+        /// 【同步】按资源路径加载本地化资源。资源映射表存储路径而非强引用，由 Loader 决定如何加载。
+        /// Resources 路径用 Resources.Load；FullPath 需自定义实现（AssetBundle/Addressables）。
+        /// </summary>
+        /// <param name="path">资源路径（Resources 相对路径 或 完整工程路径）</param>
+        /// <param name="pathType">路径类型</param>
+        T LoadAssetByPath<T>(string path, AssetPathType pathType) where T : Object;
+
+        /// <summary>
+        /// 【异步】按资源路径加载本地化资源。
+        /// </summary>
+        UniTask<T> LoadAssetByPathAsync<T>(string path, AssetPathType pathType) where T : Object;
     }
 }

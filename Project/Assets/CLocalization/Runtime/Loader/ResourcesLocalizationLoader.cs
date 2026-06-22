@@ -139,6 +139,34 @@ namespace CLocalization
             return UniTask.FromResult<T>(null);
         }
 
+        // ---------- 路径版资源加载（资源映射表方案） ----------
+
+        /// <summary>
+        /// 【同步】按资源路径加载。Resources 路径用 Resources.Load；
+        /// FullPath 在运行时不能直接加载（需 AssetBundle/Addressables 自定义 Loader），告警返回 null。
+        /// </summary>
+        public T LoadAssetByPath<T>(string path, AssetPathType pathType) where T : Object
+        {
+            if (string.IsNullOrEmpty(path)) return null;
+
+            if (pathType == AssetPathType.Resources)
+            {
+                return Resources.Load<T>(path);
+            }
+
+            // FullPath：运行时 AssetDatabase 不可用，需自定义 Loader
+            LocalizationLog.Warning($"FullPath 资源运行时加载需自定义 Loader（AssetBundle/Addressables）。路径: {path}");
+            return null;
+        }
+
+        /// <summary>
+        /// 【异步】按资源路径加载。Resources 是同步瞬时操作，用 FromResult 包装。
+        /// </summary>
+        public UniTask<T> LoadAssetByPathAsync<T>(string path, AssetPathType pathType) where T : Object
+        {
+            return UniTask.FromResult(LoadAssetByPath<T>(path, pathType));
+        }
+
         /// <summary>清空已缓存的语言文本（切换 Loader 或热更新数据后调用）。</summary>
         public void ClearCache()
         {

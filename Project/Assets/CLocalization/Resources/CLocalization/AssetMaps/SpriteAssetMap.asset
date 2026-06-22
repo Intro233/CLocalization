@@ -12,4 +12,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b28c95fe738befc4eba75c3aecc97699, type: 3}
   m_Name: SpriteAssetMap
   m_EditorClassIdentifier: 
-  entries: []
+  entries:
+  - key: 1
+    languageCode: zh-CN
+    assetPath: 
+    pathType: 1
+    asset: {fileID: 0}
+  - key: 1
+    languageCode: en-US
+    assetPath: 
+    pathType: 0
+    asset: {fileID: 0}
+  - key: 1
+    languageCode: ja-JP
+    assetPath: 
+    pathType: 0
+    asset: {fileID: 0}
+  - key: 1
+    languageCode: ko-KR
+    assetPath: 
+    pathType: 0
+    asset: {fileID: 0}

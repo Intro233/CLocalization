@@ -6,6 +6,32 @@
 
 ---
 
+## [2.5.0] - 2026-06-19
+
+资源引用解耦（路径化）。**资源映射从强引用改为路径存储，支持打 AB 分包。**
+
+### 改进
+- **资源映射表存路径**：`AssetMapping` 从 Object 强引用改为 `assetPath`(string) + `pathType`(AssetPathType) 存储。编辑期拖拽体验不变（ObjectField 预览），存储的是路径。运行时按路径加载。
+- **LanguageInfo 字体/国旗改路径**：`tmpFontPath`/`fallbackFontPath`/`flagPath` + 路径类型，全部解耦强引用。
+- **路径类型双兼容**：`AssetPathType.Resources`（Resources 相对路径，运行时 Resources.Load）+ `AssetPathType.FullPath`（完整工程路径，支持任意位置资源，打 AB 友好）。
+- **资源可放任意位置**：不再限于 Resources 目录。在 Resources 下自动识别为 Resources 路径，其他位置存完整路径。
+- **重新启用 Loader 加载层**：`ILocalizationLoader` 加 `LoadAssetByPath`/`LoadAssetByPathAsync`，默认 Resources 实现，可替换为 AssetBundle/Addressables。
+- **资源加载缓存**：`Localization` 加 `_assetCache`（路径→资源），避免重复 Load。`ClearAssetCache()` 可清除。
+- **旧数据自动迁移**：打开资源 Tab / 语言 Tab 时，检测旧 `asset` 强引用字段，自动转换为 `assetPath`。
+
+### 新增
+- `AssetPathType` 枚举（Resources / FullPath）
+- `AssetMapping.assetPath`/`pathType` 字段 + `AssetMapBase.LookupPath`/`SetAssetPath`
+- `Localization.LoadAssetByPath`/`ClearAssetCache`
+- `AssetsTab.ConvertToStoredPath`/`MigrateLegacyAssetRefs`
+- `LanguagesTab.DrawPathObjectField`/`MigrateLegacyFont`
+
+### 已知边界
+- FullPath 类型在运行时（打包后）需自定义 Loader（AssetBundle/Addressables），默认 Resources 实现对 FullPath 告警返回 null。
+- 旧的 `LoadAsset<T>(key, code)` 接口方法保留但废弃（向后兼容）。
+
+---
+
 ## [2.4.0] - 2026-06-19
 
 语言级全局字体配置。**字体本地化从组件级改为语言级全局控制。**

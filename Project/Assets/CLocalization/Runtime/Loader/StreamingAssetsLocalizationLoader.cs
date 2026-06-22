@@ -182,6 +182,23 @@ namespace CLocalization
             return UniTask.FromResult<T>(null);
         }
 
+        // ---------- 路径版资源加载（StreamingAssets 不支持，需自定义 Loader） ----------
+
+        /// <summary>StreamingAssets 模式不支持按路径加载 Unity 资源。</summary>
+        public T LoadAssetByPath<T>(string path, AssetPathType pathType) where T : Object
+        {
+            LocalizationLog.Warning(
+                $"StreamingAssets 模式不支持加载 Unity 资源。路径: {path} " +
+                "如需本地化资源，请实现自定义 Loader（AssetBundle/Addressables）。");
+            return null;
+        }
+
+        /// <summary>StreamingAssets 模式不支持按路径加载 Unity 资源。</summary>
+        public UniTask<T> LoadAssetByPathAsync<T>(string path, AssetPathType pathType) where T : Object
+        {
+            return UniTask.FromResult<T>(LoadAssetByPath<T>(path, pathType));
+        }
+
         // ---------- 内部工具 ----------
 
         /// <summary>解析 JSON 并缓存，失败返回 null。</summary>

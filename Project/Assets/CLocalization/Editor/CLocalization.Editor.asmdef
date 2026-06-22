@@ -3,8 +3,7 @@
     "rootNamespace": "CLocalization.Editor",
     "references": [
         "CLocalization.Runtime",
-        "GUID:6055be8ebc891e5419c03dfc6c60778c",
-        "Newtonsoft.Json"
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [
         "Editor"

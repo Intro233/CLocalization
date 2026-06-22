@@ -257,7 +257,10 @@ Sprite logo = Localization.GetAsset<Sprite>("ui/logo");
 
 Localize 组件的 Inspector 会显示该 key 的映射状态（如「3/4 语言已配置」），并提示去「资源」Tab 编辑。
 
-> 旧版本曾用「按目录放文件」的路径约定加载资源，现已废弃，统一改用映射表。资源映射表是 ScriptableObject（打包后不可热更新，需重新打 AssetBundle）。
+> 旧版本曾用「按目录放文件」的路径约定加载资源，现已废弃，统一改用映射表。
+>
+> **路径存储（支持打 AB）**：映射表存储资源路径而非强引用，资源可在工程任意位置。在 Resources 目录下的资源运行时可直接加载；其他位置的资源支持打 AssetBundle 分包，配合自定义 Loader 实现按需加载/热更新。
+> 打开资源 Tab 时会自动把旧强引用数据迁移为路径存储。
 
 ---
 
