@@ -40,6 +40,10 @@ namespace CLocalization.Editor
             EditorGUILayout.Space(4);
             DrawProperty("refreshOnEnable");
 
+            // 字体全局配置提示
+            EditorGUILayout.Space(4);
+            EditorGUILayout.HelpBox("字体由语言全局配置控制：在编辑窗口「语言」Tab 点「字体」按钮，为每种语言配置 TMP 字体/传统 Font。切换语言时自动应用。留空保持原字体。\n若需单点覆盖，额外挂 LocalizeFont 组件（优先级更高）。", MessageType.Info);
+
             // 预览（应用插值参数，可切换语言）
             string[] args = ReadFormatArgs();
             LocalizeKeyFieldDrawer.DrawPreview(keyProp.stringValue, args);

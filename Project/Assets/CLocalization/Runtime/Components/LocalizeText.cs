@@ -92,21 +92,31 @@ namespace CLocalization
             ApplyToTarget(text);
         }
 
-        /// <summary>把文本写入目标组件（TMP 优先），并根据当前语言应用 RTL 设置。</summary>
+        /// <summary>把文本写入目标组件（TMP 优先），并根据当前语言应用 RTL 与全局字体。</summary>
         private void ApplyToTarget(string text)
         {
-            // 根据当前语言的 RTL 标志调整排版（TMP 支持 isRightToLeft）
-            bool isRtl = Localization.IsInitialized && Localization.CurrentLanguage != null
-                         && Localization.CurrentLanguage.IsRightToLeft;
+            // 读取当前语言信息（RTL 标志 + 全局字体配置）
+            LanguageInfo lang = Localization.CurrentLanguage;
+            bool isRtl = Localization.IsInitialized && lang != null && lang.IsRightToLeft;
 
             if (tmpText != null)
             {
                 // TMP 原生支持 RTL 文本方向
                 tmpText.isRightToLeftText = isRtl;
+                // 应用全局字体（LanguageInfo 配置的，为 null 则保持组件原有字体）
+                if (lang != null && lang.TmpFont != null)
+                {
+                    tmpText.font = lang.TmpFont;
+                }
                 tmpText.text = text;
             }
             else if (uiText != null)
             {
+                // 传统 UI.Text 的全局字体（为 null 保持原字体）
+                if (lang != null && lang.FallbackFont != null)
+                {
+                    uiText.font = lang.FallbackFont;
+                }
                 // 传统 UI.Text 无原生 RTL 支持，仅做文本设置；
                 // 完整 RTL（含 bidi 文本整形）需调用方自行处理，或使用 TMP。
                 uiText.text = text;

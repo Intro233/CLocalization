@@ -43,6 +43,12 @@ namespace CLocalization.Editor
                 "字体资源映射（TMP 用 TMP_FontAsset，传统 Text 用 Font）：\n" + LocalizationEditorData.GetAssetsHintMessage(key, settings?.FontMap),
                 MessageType.Info);
 
+            EditorGUILayout.Space(4);
+            EditorGUILayout.HelpBox(
+                "⚠ 此组件为单点覆盖：优先级高于语言全局字体配置（LanguageInfo 的 tmpFont/fallbackFont）。\n" +
+                "未挂此组件的文本将使用语言配置的全局字体。仅在需要个别文本使用特殊字体时挂载。",
+                MessageType.Warning);
+
             serializedObject.ApplyModifiedProperties();
         }
     }

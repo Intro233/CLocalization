@@ -1,4 +1,5 @@
 using System;
+using TMPro;
 using UnityEngine;
 
 namespace CLocalization
@@ -29,6 +30,14 @@ namespace CLocalization
         [Tooltip("是否从右向左书写（如阿拉伯语、希伯来语）")]
         [SerializeField] private bool isRightToLeft;
 
+        /// <summary>该语言全局使用的 TMP 字体（留空则保持文本组件原有字体，不强制覆盖）。</summary>
+        [Tooltip("该语言全局 TMP 字体（留空保持原字体）。所有 LocalizeText 切到该语言时自动应用")]
+        [SerializeField] private TMP_FontAsset tmpFont;
+
+        /// <summary>该语言全局使用的传统 Font（用于 UI.Text，留空保持原字体）。</summary>
+        [Tooltip("该语言全局传统 Font（用于 UI.Text，留空保持原字体）")]
+        [SerializeField] private Font fallbackFont;
+
         /// <summary>无参构造（序列化需要）。</summary>
         public LanguageInfo() { }
 
@@ -51,6 +60,12 @@ namespace CLocalization
 
         /// <summary>是否 RTL。</summary>
         public bool IsRightToLeft => isRightToLeft;
+
+        /// <summary>该语言全局 TMP 字体（null 表示保持原字体）。</summary>
+        public TMP_FontAsset TmpFont => tmpFont;
+
+        /// <summary>该语言全局传统 Font（null 表示保持原字体）。</summary>
+        public Font FallbackFont => fallbackFont;
 
         /// <summary>是否已设置有效的语言代码。</summary>
         public bool IsValid => !string.IsNullOrEmpty(languageCode);

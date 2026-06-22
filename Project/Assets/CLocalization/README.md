@@ -10,7 +10,8 @@
 ## ✨ 特性
 
 - **文本本地化**：TextMeshPro 与传统 UI.Text 双支持，参数插值（`{0}` 位置占位 / `{name}` 命名占位，可混合），日期/货币/数字按语言区域格式化，RTL（从右到左）方向支持。
-- **资源本地化**：Sprite、AudioClip、Font / TMP_FontAsset 可按语言切换。
+- **资源本地化**：Sprite、AudioClip 可按语言切换（映射表配置）。
+- **字体本地化（全局）**：每种语言可配置全局 TMP 字体 / 传统 Font，切换语言时所有文本自动应用。留空保持原字体。少数特殊文本可用 LocalizeFont 组件单点覆盖。
 - **UI 自动刷新**：挂载 `Localize*` 组件即可，切换语言时自动更新，无需手动调接口。
 - **静态 API**：`Localization.Get("key")` 全局访问，调用极简；命名/位置/混合占位符多重重载。
 - **可配置资源加载方式**：内置 `Resources`（默认）/ `StreamingAssets` 两种模式，路径完全可配，切换时自动迁移已有文件；支持异步加载（Addressables / 热更新可通过实现 `ILocalizationLoader` 接入，主线程安全）。
@@ -257,6 +258,33 @@ Sprite logo = Localization.GetAsset<Sprite>("ui/logo");
 Localize 组件的 Inspector 会显示该 key 的映射状态（如「3/4 语言已配置」），并提示去「资源」Tab 编辑。
 
 > 旧版本曾用「按目录放文件」的路径约定加载资源，现已废弃，统一改用映射表。资源映射表是 ScriptableObject（打包后不可热更新，需重新打 AssetBundle）。
+
+---
+
+## 🔤 字体本地化（语言级全局配置）
+
+字体本地化采用**语言级全局配置**：每种语言配置一个全局字体，切换语言时所有文本自动应用。
+
+### 配置方式
+
+1. 打开 `Tools > CLocalization > Localization Window` → 切到**「语言」Tab**
+2. 在目标语言行点**「字体」**按钮展开配置区
+3. 设置该语言的 **TMP 字体**（TMP_FontAsset）和/或 **传统 Font**
+4. 留空则保持文本组件原有字体（不强制覆盖）
+
+### 工作原理
+
+- `LanguageInfo` 承载每语言的字体配置（`tmpFont` / `fallbackFont`）
+- `LocalizeText` 组件切换语言时自动应用：TMP 文本用 `tmpFont`，传统 UI.Text 用 `fallbackFont`
+- 所有挂 LocalizeText 的文本无需额外配置字体，切语言即自动切换
+
+### 优先级（高 → 低）
+
+1. **LocalizeFont 组件**（fontKey → FontAssetMap）——单点覆盖，用于个别特殊文本
+2. **LanguageInfo 全局字体**——LocalizeText 自动应用，覆盖大部分场景
+3. **保持原字体**——LanguageInfo 字体为 null 时不覆盖
+
+> 典型用法：CJK 语言（中日韩）配专用中文字体，拉丁语言配西文字体。切换语言时文本字体自动跟随。
 
 ---
 

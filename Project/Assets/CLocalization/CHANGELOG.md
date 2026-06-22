@@ -6,6 +6,31 @@
 
 ---
 
+## [2.4.0] - 2026-06-19
+
+语言级全局字体配置。**字体本地化从组件级改为语言级全局控制。**
+
+### 新增
+- **LanguageInfo 加全局字体字段**：每语言可配置 `tmpFont`（TMP_FontAsset）和 `fallbackFont`（传统 Font），在编辑窗口「语言」Tab 的「字体」折叠区配置。
+- **LocalizeText 自动应用全局字体**：`ApplyToTarget` 切换语言时，若当前语言配了字体则自动应用到所有 LocalizeText 文本（TMP 优先，传统 Text 次之）。字体留空则保持原字体不变。
+
+### 改进
+- **「语言」Tab 加字体折叠配置**：每语言行加「字体」按钮，展开后直接配置 TMP_FontAsset / Font（用 SerializedObject 写回 Settings）。
+- LocalizeText Inspector 加提示：「字体由语言全局配置控制」，并指引用户去语言 Tab 配置。
+- LocalizeFont Inspector 加提示：「此组件为单点覆盖，优先级高于语言全局字体配置」。
+
+### 优先级设计
+1. LocalizeFont 组件（fontKey + FontAssetMap）——单点覆盖，最高优先
+2. LanguageInfo 全局字体（tmpFont/fallbackFont）——LocalizeText 自动应用
+3. 保持原字体——LanguageInfo 字体为 null 时不覆盖
+
+### 不变项
+- LocalizeFont 组件保留，逻辑不变（仍走 FontAssetMap）
+- FontAssetMap 保留（供 LocalizeFont 单点覆盖用）
+- OnLanguageChanged 事件不变（LocalizeText 已订阅）
+
+---
+
 ## [2.3.0] - 2026-06-18
 
 资源本地化可视化配置（映射表）。**重大改进：废弃目录约定，改用映射表配置。**

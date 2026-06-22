@@ -12,16 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 0}
   m_Name: FontAssetMap
   m_EditorClassIdentifier: CLocalization.Runtime:CLocalization:FontAssetMap
-  entries:
-  - key: 111
-    languageCode: zh-CN
-    asset: {fileID: 0}
-  - key: 111
-    languageCode: en-US
-    asset: {fileID: 0}
-  - key: 111
-    languageCode: ja-JP
-    asset: {fileID: 0}
-  - key: 111
-    languageCode: ko-KR
-    asset: {fileID: 0}
+  entries: []
