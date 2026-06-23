@@ -1,0 +1,32 @@
+{
+    "name": "com.clocalization.plugin",
+    "version": "3.0.0",
+    "displayName": "CLocalization",
+    "description": "轻量级 Unity 多语言（本地化）插件。支持文本/Sprite/Audio/字体本地化、参数插值、日期货币格式化、CSV 协作工作流、可配置资源加载方式（Resources/StreamingAssets）、异步加载（UniTask）。",
+    "unity": "2022.3",
+    "unityRelease": "62f2",
+    "license": "MIT",
+    "keywords": [
+        "localization",
+        "i18n",
+        "multi-language",
+        "textmeshpro",
+        "csv"
+    ],
+    "author": {
+        "name": "WangJunCheng",
+        "url": "https://github.com/"
+    },
+    "samples": [
+        {
+            "displayName": "Demo",
+            "description": "多语言切换演示场景（语言切换按钮 + 文本/字体/格式化示例）",
+            "path": "Samples~/Demo"
+        }
+    ],
+    "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "3.2.1",
+        "com.unity.textmeshpro": "3.0.7",
+        "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask#upm-package"
+    }
+}

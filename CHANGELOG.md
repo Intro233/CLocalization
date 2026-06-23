@@ -6,6 +6,29 @@
 
 ---
 
+## [3.0.0] - 2026-06-19
+
+**打包为 Unity UPM 包。** 插件从工程内源码重组为标准 Unity Package Manager 包。
+
+### 改进
+- **UPM 包结构**：插件代码从 `Assets/CLocalization/` 重组为 UPM 包根目录（Runtime/Editor/Resources/Samples~）。
+- **package.json**：包名 `com.clocalization.plugin`，version 3.0.0，声明依赖（Newtonsoft/TMP/UniTask）+ samples（Demo）。
+- **Runtime asmdef 移入 Runtime/ 子目录**（UPM 惯例，与 Editor/ 对称）。
+- **Demo 移入 Samples~/Demo/**（~后缀默认不导入，用户通过 Package Manager「Import samples」按需导入）。
+- **manifest.json 本地引用**：测试工程通过 `file:../../` 引用包根。
+
+### 安装方式
+- 本地：`manifest.json` 加 `"com.clocalization.plugin": "file:../../"`
+- Git：`"com.clocalization.plugin": "https://github.com/.../CLocalization.git"`
+- Package Manager 界面导入
+
+### 不变项
+- 所有 .meta 文件 GUID 保持不变（脚本/资源引用不断裂）。
+- Resources 路径不变（包内 Resources.Load 正常工作）。
+- asmdef 引用不变（名称引用，无需改 GUID）。
+
+---
+
 ## [2.5.0] - 2026-06-19
 
 资源引用解耦（路径化）。**资源映射从强引用改为路径存储，支持打 AB 分包。**
